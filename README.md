@@ -50,6 +50,31 @@ Fluxo para alterar o banco: editar `src/db/schema.ts`, rodar `npm run db:generat
 
 Todas as tabelas têm Row Level Security habilitado. A aplicação acessa o banco pelo servidor, e o RLS sem políticas bloqueia o acesso direto pela API pública do Supabase.
 
+## Autenticação
+
+O login é feito com e-mail e senha pelo Supabase Auth. Não há cadastro público: as contas são criadas no painel do Supabase e vinculadas aos integrantes da residência.
+
+1. Em **Project Settings → API Keys**, copie a chave **publishable** para `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+2. Em **Authentication → Sign In / Providers**, desative **Allow new users to sign up** e deixe o provedor **Email** habilitado.
+3. Em **Authentication → Users → Add user → Create new user**, crie uma conta para cada integrante, com **Auto Confirm User** marcado.
+4. No **SQL Editor**, crie a residência e vincule os integrantes às contas, ajustando nomes e e-mails:
+
+```sql
+with casa as (
+  insert into households (name) values ('Nossa casa') returning id
+)
+insert into household_members (household_id, display_name, user_id)
+select casa.id, integrante.nome, u.id
+from casa
+cross join (values
+  ('Lucas', 'email-do-lucas@exemplo.com'),
+  ('Karina', 'email-da-karina@exemplo.com')
+) as integrante(nome, email)
+join auth.users u on u.email = integrante.email;
+```
+
+Rotas protegidas redirecionam para `/login` quem não estiver autenticado. As páginas `/login` e `/status` são públicas.
+
 ## Variáveis de ambiente
 
 | Variável | Uso |
@@ -72,6 +97,7 @@ src/
   app/           rotas, telas e endpoints (interface)
   components/    componentes visuais reutilizáveis
     ui/          componentes do shadcn/ui
+  proxy.ts       renovação da sessão e proteção das rotas
   domain/        regras de negócio puras, sem dependência de framework
   server/        serviços de aplicação, executados apenas no servidor
   db/            schema, migrations e acesso ao banco
