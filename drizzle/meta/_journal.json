@@ -8,6 +8,13 @@
       "when": 1795120526943,
       "tag": "0000_residencia_e_integrantes",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1795124004254,
+      "tag": "0001_vinculo_integrante_usuario",
+      "breakpoints": true
     }
   ]
 }

@@ -1,16 +1,48 @@
+import { Suspense } from "react";
+import { Button } from "@/components/ui/button";
+import { getCurrentMember } from "@/server/auth";
+import { signOut } from "./login/actions";
+
 const proximasEtapas = [
-  "Login dos integrantes da casa",
   "Conexão com os bancos via Open Finance",
   "Fatura do cartão por categoria",
+  "Correção de categorias e participantes",
 ];
+
+async function MemberGreeting() {
+  const member = await getCurrentMember();
+
+  if (!member) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Sua conta ainda não está vinculada a uma residência.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-sm text-muted-foreground">{member.householdName}</p>
+      <p className="text-lg font-medium">Olá, {member.displayName}</p>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8 px-6 py-12">
-      <header className="flex flex-col gap-2">
+      <header className="flex items-center justify-between gap-4">
         <h1 className="text-3xl font-semibold tracking-tight">Kalu</h1>
-        <p className="text-muted-foreground">Finanças da casa em um só lugar.</p>
+        <form action={signOut}>
+          <Button type="submit" variant="outline" size="sm">
+            Sair
+          </Button>
+        </form>
       </header>
+
+      <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
+        <MemberGreeting />
+      </Suspense>
 
       <section className="rounded-lg border bg-card p-5 text-card-foreground">
         <h2 className="font-medium">Em construção</h2>
