@@ -30,6 +30,25 @@ A aplicação sobe em [http://localhost:3000](http://localhost:3000).
 | `npm run build` | Build de produção |
 | `npm run start` | Sobe o build de produção |
 | `npm run lint` | Verificação de código com ESLint |
+| `npm run db:generate` | Gera uma nova migration a partir de `src/db/schema.ts` |
+| `npm run db:migrate` | Aplica as migrations pendentes no banco |
+| `npm run db:studio` | Abre o Drizzle Studio para consultar o banco |
+
+## Banco de dados
+
+O banco é um PostgreSQL gerenciado pelo Supabase, acessado com o [Drizzle ORM](https://orm.drizzle.team).
+
+1. Crie um projeto no [Supabase](https://supabase.com) e guarde a senha do banco.
+2. No painel do projeto, clique em **Connect** e copie as connection strings:
+   - **Transaction pooler** (porta 6543) para `DATABASE_URL`
+   - **Session pooler** (porta 5432) para `DATABASE_MIGRATION_URL`
+3. Preencha as duas variáveis no `.env.local`, substituindo `[YOUR-PASSWORD]` pela senha do banco.
+4. Aplique as migrations com `npm run db:migrate`.
+5. Com a aplicação rodando, acesse `/status` para confirmar a conexão.
+
+Fluxo para alterar o banco: editar `src/db/schema.ts`, rodar `npm run db:generate -- --name=descricao`, revisar o SQL gerado em `drizzle/` e aplicar com `npm run db:migrate`.
+
+Todas as tabelas têm Row Level Security habilitado. A aplicação acessa o banco pelo servidor, e o RLS sem políticas bloqueia o acesso direto pela API pública do Supabase.
 
 ## Variáveis de ambiente
 
@@ -38,7 +57,8 @@ A aplicação sobe em [http://localhost:3000](http://localhost:3000).
 | `NEXT_PUBLIC_SUPABASE_URL` | URL do projeto Supabase |
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Chave pública do Supabase, usada no navegador |
 | `SUPABASE_SECRET_KEY` | Chave secreta do Supabase, somente no servidor |
-| `DATABASE_URL` | Conexão com o PostgreSQL pelo pooler do Supabase |
+| `DATABASE_URL` | Conexão da aplicação com o PostgreSQL, pelo pooler do Supabase em modo transação (porta 6543) |
+| `DATABASE_MIGRATION_URL` | Conexão usada pelas migrations, pelo pooler do Supabase em modo sessão (porta 5432) |
 | `ENCRYPTION_KEY` | Chave de criptografia das credenciais da Pluggy |
 | `CRON_SECRET` | Protege os endpoints das tarefas agendadas |
 
@@ -47,6 +67,7 @@ As credenciais da Pluggy não ficam em variáveis de ambiente: cada integrante c
 ## Estrutura
 
 ```
+drizzle/         migrations SQL geradas pelo Drizzle
 src/
   app/           rotas, telas e endpoints (interface)
   components/    componentes visuais reutilizáveis
