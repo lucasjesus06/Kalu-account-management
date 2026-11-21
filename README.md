@@ -103,6 +103,23 @@ A sincronização busca contas, faturas e transações na Pluggy e grava no banc
 - Cada compra de cartão fica vinculada à sua fatura pelo identificador da fatura na fonte, nunca por data.
 - Valores são guardados em centavos inteiros.
 - Cada execução fica registrada em `sync_runs`, com totais ou mensagem de erro. Se a Pluggy recusar as credenciais ou não encontrar o banco, a conexão fica com status de erro até a próxima sincronização bem-sucedida.
+- Só uma sincronização por conexão roda de cada vez. Uma execução que ficou presa por mais de 15 minutos é marcada como interrompida e libera a próxima.
+
+### Sincronização automática
+
+A Vercel chama `GET /api/cron/sync` uma vez por dia, às 09:00 UTC (06:00 em Brasília), conforme o `vercel.json`. A rota sincroniza todas as conexões que não foram revogadas, uma depois da outra, e devolve um resumo em JSON. Ela só responde a quem enviar o cabeçalho `Authorization: Bearer <CRON_SECRET>`, que a Vercel envia sozinha quando a variável `CRON_SECRET` está configurada no projeto.
+
+No plano Hobby a Vercel executa o agendamento uma vez por dia, em algum momento dentro da hora marcada. Para rodar na mão:
+
+```bash
+curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/sync
+```
+
+### Validade da autorização
+
+A autorização dada no Meu Pluggy vale um ano. O Kalu guarda a data de vencimento de cada conexão (a informada pela Pluggy ou, na falta dela, um ano depois do cadastro) e avisa no Início e em Conexões quando faltam 30 dias ou menos, em vermelho a partir de 7 dias.
+
+Antes de buscar os dados, a sincronização consulta o item na Pluggy. Se a autorização venceu ou foi revogada, a conexão passa para **Expirada** e nenhum dado é alterado. Se a Pluggy devolver uma conexão sem nenhuma conta quando antes havia contas, a sincronização também falha sem apagar nada. Depois de renovar no Meu Pluggy, basta clicar em **Sincronizar agora** ou esperar a próxima execução diária.
 
 ## Testes
 
@@ -122,7 +139,7 @@ Os testes de integração rodam contra um PostgreSQL em memória ([PGlite](https
 | `DATABASE_URL` | Conexão da aplicação com o PostgreSQL, pelo pooler do Supabase em modo transação (porta 6543) |
 | `DATABASE_MIGRATION_URL` | Conexão usada pelas migrations, pelo pooler do Supabase em modo sessão (porta 5432) |
 | `ENCRYPTION_KEY` | Chave de criptografia das credenciais da Pluggy |
-| `CRON_SECRET` | Protege os endpoints das tarefas agendadas |
+| `CRON_SECRET` | Protege a rota da sincronização diária. Gere com `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` e configure na Vercel |
 | `PLUGGY_API_URL` | Opcional. Endereço da API da Pluggy; vazio usa `https://api.pluggy.ai`. Serve para apontar para um servidor simulado em testes |
 
 As credenciais da Pluggy não ficam em variáveis de ambiente: cada integrante cadastra as suas, que são guardadas criptografadas no banco.
