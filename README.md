@@ -133,6 +133,22 @@ O valor oficial de cada fatura fechada vem da fonte. O Kalu explica esse valor c
 - A fatura aberta é formada pelas transações sem identificador de fatura. O pagamento da fatura anterior aparece nela e fica fora do total. Compras pendentes entram no total e são indicadas à parte.
 - O limite utilizado do cartão inclui faturas fechadas não pagas, a fatura aberta e parcelas futuras, e por isso não é apresentado como valor de fatura.
 
+## Categorização
+
+As categorias de gastos ficam na tabela `categories`, criada com a lista de `src/domain/categories.ts`. Cada transação guarda:
+
+- `merchant_name`: o estabelecimento, extraído da descrição sem intermediadores de pagamento (`DL*`, `MP *`, `HNA*`, `ZP*`, `PAYPAL *`, `IFD*`, `KEETABR*`), marcadores de status (`PENDING`), parcelas e diferenças de maiúsculas, acentos e espaços. A descrição original é preservada.
+- `category_id`: a categoria.
+- `category_source`: a origem da classificação, `automatic`, `rule` ou `user`. Vazio significa que a transação ainda não foi avaliada.
+
+A categorização automática é determinística, sem inteligência artificial:
+
+1. Estabelecimentos conhecidos (ex.: Uber e 99, iFood e Keeta, farmácias, streaming, supermercados, postos, concessionárias de água e energia), definidos em `src/domain/categorization.ts`.
+2. Na falta deles, a categoria informada pela Pluggy, traduzida para as categorias do Kalu.
+3. Sem nenhuma das duas, a transação fica sem categoria. Pagamentos de fatura, transferências e receitas ficam sem categoria de propósito.
+
+A sincronização categoriza só as transações ainda não avaliadas, então mudar uma regra não reescreve o histórico. Uma transação categorizada automaticamente volta a ser avaliada apenas se a descrição ou a categoria da fonte mudar. Classificações feitas pelo usuário nunca são alteradas pela sincronização. A tela Contas mostra a porcentagem das compras de cada cartão que têm categoria.
+
 ## Testes
 
 ```bash
