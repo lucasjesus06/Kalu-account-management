@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "id": "bb22bb22-0000-4000-8000-000000000001",
+      "accountId": "48f9caac-0ea6-477c-8962-5a3183c9ee29",
+      "date": "2026-11-05T09:00:00.000Z",
+      "description": "PIX RECEBIDO SALARIO TESTE",
+      "currencyCode": "BRL",
+      "amount": 3600,
+      "type": "CREDIT",
+      "status": "POSTED",
+      "category": "Salary",
+      "creditCardMetadata": null
+    },
+    {
+      "id": "bb22bb22-0000-4000-8000-000000000002",
+      "accountId": "48f9caac-0ea6-477c-8962-5a3183c9ee29",
+      "date": "2026-11-07T03:00:00.000Z",
+      "description": "PAGTO CARTAO CREDITO",
+      "currencyCode": "BRL",
+      "amount": -4034.77,
+      "type": "DEBIT",
+      "status": "POSTED",
+      "category": "Credit card payment",
+      "creditCardMetadata": null
+    }
+  ],
+  "next": null
+}
