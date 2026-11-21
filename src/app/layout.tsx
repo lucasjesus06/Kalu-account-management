@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { restoreHideValuesScript } from "@/lib/privacy";
 import { manrope, sora } from "./fonts";
 import "./globals.css";
 
@@ -19,7 +20,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="pt-BR"
       className={`dark ${manrope.variable} ${sora.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: restoreHideValuesScript }} />
+      </head>
       <body className="min-h-full flex flex-col font-sans">{children}</body>
     </html>
   );

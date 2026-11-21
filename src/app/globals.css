@@ -82,3 +82,13 @@
     background-size: 100% 420px;
   }
 }
+
+@layer components {
+  .money {
+    transition: filter 150ms ease;
+  }
+  .blur-values .money {
+    filter: blur(8px);
+    user-select: none;
+  }
+}
