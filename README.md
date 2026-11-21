@@ -30,6 +30,7 @@ A aplicação sobe em [http://localhost:3000](http://localhost:3000).
 | `npm run build` | Build de produção |
 | `npm run start` | Sobe o build de produção |
 | `npm run lint` | Verificação de código com ESLint |
+| `npm test` | Roda os testes unitários e de integração (Vitest) |
 | `npm run db:generate` | Gera uma nova migration a partir de `src/db/schema.ts` |
 | `npm run db:migrate` | Aplica as migrations pendentes no banco |
 | `npm run db:studio` | Abre o Drizzle Studio para consultar o banco |
@@ -75,6 +76,30 @@ join auth.users u on u.email = integrante.email;
 
 Rotas protegidas redirecionam para `/login` quem não estiver autenticado. As páginas `/login` e `/status` são públicas.
 
+## Conexões com a Pluggy
+
+Cada integrante cadastra as próprias credenciais da Pluggy e os próprios bancos na tela **Conexões**.
+
+1. Gere a chave de criptografia e coloque o resultado em `ENCRYPTION_KEY` (no `.env.local` e na Vercel):
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+2. No [Meu Pluggy](https://meu.pluggy.ai), conecte os bancos. No [Dashboard da Pluggy](https://dashboard.pluggy.ai), com o mesmo e-mail, conecte o **MeuPluggy** à aplicação.
+3. Na tela **Conexões** do Kalu, informe o **Client ID** e o **Client Secret** da aplicação. Eles são validados na Pluggy antes de serem salvos, e o secret fica criptografado (AES-256-GCM) no banco.
+4. Adicione o **Item ID** de cada banco, copiado de **Connected Items** no Dashboard.
+
+A `ENCRYPTION_KEY` não pode ser trocada sem cadastrar as credenciais de novo: os secrets salvos só podem ser lidos com a chave que os criptografou.
+
+## Testes
+
+```bash
+npm test
+```
+
+Os testes de integração rodam contra um PostgreSQL em memória ([PGlite](https://pglite.dev)) com as migrations do projeto aplicadas, e a API da Pluggy é simulada.
+
 ## Variáveis de ambiente
 
 | Variável | Uso |
@@ -103,6 +128,7 @@ src/
   db/            schema, migrations e acesso ao banco
   integrations/  clientes de fornecedores externos (ex.: Pluggy)
   lib/           utilitários genéricos
+  test/          utilitários de teste
 ```
 
 As pastas são criadas conforme as estórias que as utilizam. A regra é que `domain` não dependa de nenhuma outra camada e que nenhum tipo de fornecedor externo saia de `integrations`.

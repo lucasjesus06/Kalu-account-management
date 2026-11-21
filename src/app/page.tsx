@@ -1,10 +1,11 @@
+import Link from "next/link";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { getCurrentMember } from "@/server/auth";
 import { signOut } from "./login/actions";
 
 const proximasEtapas = [
-  "Conexão com os bancos via Open Finance",
+  "Sincronização de contas, cartões e faturas",
   "Fatura do cartão por categoria",
   "Correção de categorias e participantes",
 ];
@@ -43,6 +44,10 @@ export default function Home() {
       <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
         <MemberGreeting />
       </Suspense>
+
+      <Button asChild variant="outline" size="lg">
+        <Link href="/conexoes">Gerenciar conexões</Link>
+      </Button>
 
       <section className="rounded-lg border bg-card p-5 text-card-foreground">
         <h2 className="font-medium">Em construção</h2>
