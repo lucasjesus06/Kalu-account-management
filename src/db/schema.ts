@@ -48,6 +48,7 @@ export const integrationConnections = pgTable(
     institutionName: text("institution_name"),
     status: text("status", { enum: connectionStatuses }).notNull().default("active"),
     lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    authorizationExpiresAt: timestamp("authorization_expires_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

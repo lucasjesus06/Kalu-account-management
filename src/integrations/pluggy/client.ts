@@ -19,6 +19,8 @@ export type PluggyItemSummary = {
   id: string;
   institutionName: string | null;
   status: string | null;
+  errorCode: string | null;
+  consentExpiresAt: Date | null;
 };
 
 export class PluggyAuthError extends Error {}
@@ -76,7 +78,13 @@ async function get<T>(apiKey: string, url: string, resource: string): Promise<T>
 }
 
 export async function getItem(apiKey: string, itemId: string): Promise<PluggyItemSummary> {
-  const body = await get<{ id?: unknown; status?: unknown; connector?: { name?: unknown } | null }>(
+  const body = await get<{
+    id?: unknown;
+    status?: unknown;
+    connector?: { name?: unknown } | null;
+    error?: { code?: unknown } | null;
+    consentExpiresAt?: unknown;
+  }>(
     apiKey,
     `/items/${encodeURIComponent(itemId)}`,
     "Item",
@@ -86,6 +94,11 @@ export async function getItem(apiKey: string, itemId: string): Promise<PluggyIte
     id: typeof body.id === "string" ? body.id : itemId,
     institutionName: typeof body.connector?.name === "string" ? body.connector.name : null,
     status: typeof body.status === "string" ? body.status : null,
+    errorCode: typeof body.error?.code === "string" ? body.error.code : null,
+    consentExpiresAt:
+      typeof body.consentExpiresAt === "string" && !Number.isNaN(Date.parse(body.consentExpiresAt))
+        ? new Date(body.consentExpiresAt)
+        : null,
   };
 }
 

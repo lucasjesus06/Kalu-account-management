@@ -67,6 +67,8 @@ describe("getItem", () => {
       id: "item-1",
       institutionName: "Santander",
       status: "UPDATED",
+      errorCode: null,
+      consentExpiresAt: null,
     });
 
     const [url, init] = fetch.mock.calls[0];
@@ -80,7 +82,31 @@ describe("getItem", () => {
       id: "item-1",
       institutionName: null,
       status: null,
+      errorCode: null,
+      consentExpiresAt: null,
     });
+  });
+
+  it("lê o código de erro e a validade da autorização", async () => {
+    vi.stubGlobal(
+      "fetch",
+      respostaFalsa(200, {
+        id: "item-1",
+        status: "LOGIN_ERROR",
+        error: { code: "USER_AUTHORIZATION_EXPIRED", message: "expirou" },
+        consentExpiresAt: "2027-11-19T17:52:45.000Z",
+      }),
+    );
+    await expect(getItem("chave-123", "item-1")).resolves.toMatchObject({
+      status: "LOGIN_ERROR",
+      errorCode: "USER_AUTHORIZATION_EXPIRED",
+      consentExpiresAt: new Date("2027-11-19T17:52:45.000Z"),
+    });
+  });
+
+  it("ignora data de validade inválida", async () => {
+    vi.stubGlobal("fetch", respostaFalsa(200, { id: "item-1", consentExpiresAt: "não é data" }));
+    await expect(getItem("chave-123", "item-1")).resolves.toMatchObject({ consentExpiresAt: null });
   });
 
   it.each([403, 404])("trata HTTP %i como item não encontrado", async (status) => {

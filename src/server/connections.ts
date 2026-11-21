@@ -8,6 +8,7 @@ import {
   PluggyAuthError,
   PluggyNotFoundError,
 } from "@/integrations/pluggy/client";
+import { defaultAuthorizationExpiry } from "@/domain/authorization";
 import { decrypt, encrypt } from "./crypto";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
@@ -33,6 +34,7 @@ export async function listConnections(memberId: string) {
       institutionName: integrationConnections.institutionName,
       status: integrationConnections.status,
       lastSyncedAt: integrationConnections.lastSyncedAt,
+      authorizationExpiresAt: integrationConnections.authorizationExpiresAt,
       createdAt: integrationConnections.createdAt,
     })
     .from(integrationConnections)
@@ -91,12 +93,15 @@ export async function addConnection(memberId: string, itemId: string): Promise<A
   }
 
   let institutionName: string | null;
+  let authorizationExpiresAt: Date;
   try {
     const apiKey = await authenticate({
       clientId: credentials.clientId,
       clientSecret: decrypt(credentials.clientSecretEncrypted),
     });
-    institutionName = (await getItem(apiKey, itemId)).institutionName;
+    const item = await getItem(apiKey, itemId);
+    institutionName = item.institutionName;
+    authorizationExpiresAt = item.consentExpiresAt ?? defaultAuthorizationExpiry(new Date());
   } catch (error) {
     if (error instanceof PluggyAuthError) {
       return { ok: false, error: "Suas credenciais deixaram de ser aceitas pela Pluggy. Cadastre-as novamente." };
@@ -110,7 +115,7 @@ export async function addConnection(memberId: string, itemId: string): Promise<A
 
   const inserted = await db
     .insert(integrationConnections)
-    .values({ memberId, externalItemId: itemId, institutionName })
+    .values({ memberId, externalItemId: itemId, institutionName, authorizationExpiresAt })
     .onConflictDoNothing()
     .returning({ id: integrationConnections.id });
 
