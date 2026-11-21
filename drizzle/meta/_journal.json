@@ -50,6 +50,20 @@
       "when": 1795301350726,
       "tag": "0006_contagem_de_mudancas",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1795304866558,
+      "tag": "0007_categorias",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1795304867309,
+      "tag": "0008_categorias_iniciais",
+      "breakpoints": true
     }
   ]
 }

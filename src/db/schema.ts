@@ -103,6 +103,14 @@ export const creditCardBills = pgTable(
   (table) => [uniqueIndex("credit_card_bills_account_external_idx").on(table.accountId, table.externalId)],
 ).enableRLS();
 
+export const categories = pgTable("categories", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  slug: text("slug").notNull().unique(),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
 export const transactionDirections = ["outflow", "inflow"] as const;
 export const transactionStatuses = ["posted", "pending"] as const;
 
