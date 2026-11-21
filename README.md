@@ -122,6 +122,17 @@ A autorização dada no Meu Pluggy vale um ano. O Kalu guarda a data de vencimen
 
 Antes de buscar os dados, a sincronização consulta o item na Pluggy. Se a autorização venceu ou foi revogada, a conexão passa para **Expirada** e nenhum dado é alterado. Se a Pluggy devolver uma conexão sem nenhuma conta quando antes havia contas, a sincronização também falha sem apagar nada. Depois de renovar no Meu Pluggy, basta clicar em **Sincronizar agora** ou esperar a próxima execução diária.
 
+## Regras de fatura
+
+O valor oficial de cada fatura fechada vem da fonte. O Kalu explica esse valor com as transações importadas:
+
+- Cada transação de cartão é classificada como **compra** (toda saída), **pagamento de fatura** (entrada com a categoria de pagamento da fonte, com descrição de pagamento ou com o valor de uma fatura, com tolerância de 10 centavos) ou **crédito** (as demais entradas, como estornos e cashback).
+- A fatura fechada é montada pelo identificador da fatura na fonte, nunca por datas. O total identificado é a soma das compras menos os créditos. O pagamento da fatura anterior, que vem dentro da fatura, não é abatido.
+- A diferença entre o valor oficial e o total identificado é exibida como **não identificado pela fonte** (encargos, compras anteriores ao histórico) e nunca é distribuída entre categorias.
+- A fatura mais antiga é marcada como incompleta, porque o histórico disponível pode não cobrir o ciclo inteiro.
+- A fatura aberta é formada pelas transações sem identificador de fatura. O pagamento da fatura anterior aparece nela e fica fora do total. Compras pendentes entram no total e são indicadas à parte.
+- O limite utilizado do cartão inclui faturas fechadas não pagas, a fatura aberta e parcelas futuras, e por isso não é apresentado como valor de fatura.
+
 ## Testes
 
 ```bash
