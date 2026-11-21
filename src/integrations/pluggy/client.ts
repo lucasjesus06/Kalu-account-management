@@ -3,8 +3,12 @@ import type { ImportedAccount, ImportedBill, ImportedTransaction } from "@/domai
 import { mapAccount, mapBill, mapTransaction } from "./mappers";
 import type { PluggyAccount, PluggyBill, PluggyCursorPage, PluggyPage, PluggyTransaction } from "./types";
 
-const BASE_URL = "https://api.pluggy.ai";
+const DEFAULT_BASE_URL = "https://api.pluggy.ai";
 const MAX_PAGES = 200;
+
+function baseUrl() {
+  return process.env.PLUGGY_API_URL || DEFAULT_BASE_URL;
+}
 
 export type PluggyCredentials = {
   clientId: string;
@@ -31,7 +35,7 @@ export class PluggyRequestError extends Error {
 }
 
 export async function authenticate(credentials: PluggyCredentials) {
-  const response = await fetch(`${BASE_URL}/auth`, {
+  const response = await fetch(`${baseUrl()}/auth`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(credentials),
@@ -53,7 +57,7 @@ export async function authenticate(credentials: PluggyCredentials) {
 }
 
 async function get<T>(apiKey: string, url: string, resource: string): Promise<T> {
-  const response = await fetch(url.startsWith("http") ? url : `${BASE_URL}${url}`, {
+  const response = await fetch(url.startsWith("http") ? url : `${baseUrl()}${url}`, {
     headers: { "X-API-KEY": apiKey },
     cache: "no-store",
   });
@@ -113,7 +117,7 @@ function nextTransactionsUrl(next: string, currentUrl: string) {
   if (next.startsWith("?")) {
     return `/v2/transactions${next}`;
   }
-  const url = new URL(currentUrl, BASE_URL);
+  const url = new URL(currentUrl, baseUrl());
   url.searchParams.set("after", next);
   return `${url.pathname}${url.search}`;
 }
