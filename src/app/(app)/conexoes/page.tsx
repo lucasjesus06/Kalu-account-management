@@ -5,9 +5,12 @@ import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/panel";
 import { StatusBadge } from "@/components/status-badge";
 import { getCurrentMember } from "@/server/auth";
+import { formatDate, formatDateTime } from "@/lib/format";
 import { getCredentialsSummary, listConnections } from "@/server/connections";
+import { latestSyncRuns } from "@/server/sync";
 import { ConnectionForm } from "./connection-form";
 import { CredentialsForm } from "./credentials-form";
+import { SyncButton } from "./sync-button";
 
 export const metadata: Metadata = {
   title: "Conexões · Kalu",
@@ -20,11 +23,6 @@ const statusBadges = {
   error: { label: "Com erro", tone: "warning" },
 } as const;
 
-const dateFormat = new Intl.DateTimeFormat("pt-BR", {
-  dateStyle: "short",
-  timeZone: "America/Sao_Paulo",
-});
-
 async function ConnectionsContent() {
   const member = await getCurrentMember();
 
@@ -36,6 +34,7 @@ async function ConnectionsContent() {
     getCredentialsSummary(member.memberId),
     listConnections(member.memberId),
   ]);
+  const runs = await latestSyncRuns(connections.map((connection) => connection.id));
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-2">
@@ -53,18 +52,30 @@ async function ConnectionsContent() {
             {connections.map((connection) => {
               const name = connection.institutionName ?? "Instituição";
               const badge = statusBadges[connection.status];
+              const lastRun = runs.get(connection.id);
               return (
-                <li key={connection.id} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
-                  <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-secondary font-display font-bold text-primary">
-                    {name.charAt(0).toUpperCase()}
-                  </span>
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-semibold">{name}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {member.displayName} · adicionada em {dateFormat.format(connection.createdAt)}
+                <li key={connection.id} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
+                  <div className="flex items-center gap-4">
+                    <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-secondary font-display font-bold text-primary">
+                      {name.charAt(0).toUpperCase()}
                     </span>
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <span className="truncate font-semibold">{name}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {member.displayName} ·{" "}
+                        {connection.lastSyncedAt
+                          ? `sincronizado em ${formatDateTime(connection.lastSyncedAt)}`
+                          : "ainda não sincronizado"}
+                      </span>
+                    </div>
+                    <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
                   </div>
-                  <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+                  {lastRun?.status === "failed" && lastRun.error && (
+                    <p className="text-sm text-destructive">
+                      Última tentativa em {formatDateTime(lastRun.startedAt)}: {lastRun.error}
+                    </p>
+                  )}
+                  <SyncButton connectionId={connection.id} />
                 </li>
               );
             })}
@@ -79,7 +90,7 @@ async function ConnectionsContent() {
       <Panel title="Credenciais da Pluggy" icon={KeyRound}>
         <p className="mb-5 text-sm text-muted-foreground">
           {credentials
-            ? `Client ID ${credentials.clientId.slice(0, 8)}… · atualizadas em ${dateFormat.format(credentials.updatedAt)}`
+            ? `Client ID ${credentials.clientId.slice(0, 8)}… · atualizadas em ${formatDate(credentials.updatedAt)}`
             : "Informe o Client ID e o Client Secret da sua aplicação no Dashboard da Pluggy."}
         </p>
         <CredentialsForm hasCredentials={Boolean(credentials)} />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBRL } from "./format";
+import { formatBRL, formatDate, formatDateTime } from "./format";
 
 const semEspacoEspecial = (texto: string) => texto.replace(/\s/g, " ");
 
@@ -13,5 +13,13 @@ describe("formatBRL", () => {
     [-0, "R$ 0,00"],
   ])("formata %d como %s", (valor, esperado) => {
     expect(semEspacoEspecial(formatBRL(valor))).toBe(esperado);
+  });
+});
+
+describe("datas", () => {
+  it("formata no fuso de São Paulo", () => {
+    const meiaNoiteUtc = new Date("2026-11-22T02:30:00.000Z");
+    expect(formatDate(meiaNoiteUtc)).toBe("21/11/2026");
+    expect(formatDateTime(meiaNoiteUtc)).toBe("21/11/2026 às 23:30");
   });
 });
