@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { KeyRound, Plug } from "lucide-react";
+import { AuthorizationNotice } from "@/components/authorization-notice";
 import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/panel";
 import { StatusBadge } from "@/components/status-badge";
+import { authorizationAlert } from "@/domain/authorization";
 import { getCurrentMember } from "@/server/auth";
 import { formatDate, formatDateTime } from "@/lib/format";
 import { getCredentialsSummary, listConnections } from "@/server/connections";
@@ -35,6 +37,7 @@ async function ConnectionsContent() {
     listConnections(member.memberId),
   ]);
   const runs = await latestSyncRuns(connections.map((connection) => connection.id));
+  const now = new Date();
 
   return (
     <div className="grid items-start gap-4 lg:grid-cols-2">
@@ -53,6 +56,7 @@ async function ConnectionsContent() {
               const name = connection.institutionName ?? "Instituição";
               const badge = statusBadges[connection.status];
               const lastRun = runs.get(connection.id);
+              const alert = authorizationAlert(connection, now);
               return (
                 <li key={connection.id} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
                   <div className="flex items-center gap-4">
@@ -70,7 +74,13 @@ async function ConnectionsContent() {
                     </div>
                     <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
                   </div>
-                  {lastRun?.status === "failed" && lastRun.error && (
+                  {alert && <AuthorizationNotice institution={name} alert={alert} />}
+                  {connection.authorizationExpiresAt && !alert && (
+                    <p className="text-sm text-muted-foreground">
+                      Autorização válida até {formatDate(connection.authorizationExpiresAt)}
+                    </p>
+                  )}
+                  {lastRun?.status === "failed" && lastRun.error && alert?.level !== "expired" && (
                     <p className="text-sm text-destructive">
                       Última tentativa em {formatDateTime(lastRun.startedAt)}: {lastRun.error}
                     </p>

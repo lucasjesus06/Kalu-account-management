@@ -3,7 +3,9 @@ import { Suspense } from "react";
 import { ArrowRight, ListChecks, Plug } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/panel";
+import { AuthorizationNotice } from "@/components/authorization-notice";
 import { Button } from "@/components/ui/button";
+import { authorizationAlert } from "@/domain/authorization";
 import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
 import { listConnections } from "@/server/connections";
 
@@ -38,6 +40,11 @@ async function HomeContent() {
   ]);
 
   const banks = connections.map((connection) => connection.institutionName ?? "Instituição");
+  const now = new Date();
+  const alerts = connections.flatMap((connection) => {
+    const alert = authorizationAlert(connection, now);
+    return alert ? [{ id: connection.id, institution: connection.institutionName ?? "Instituição", alert }] : [];
+  });
 
   return (
     <>
@@ -45,6 +52,14 @@ async function HomeContent() {
         title={capitalize(monthFormat.format(new Date()))}
         description={`${member.householdName} · ${namesFormat.format(members.map((m) => m.displayName))}`}
       />
+
+      {alerts.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {alerts.map(({ id, institution, alert }) => (
+            <AuthorizationNotice key={id} institution={institution} alert={alert} />
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel title="Suas conexões" icon={Plug}>
