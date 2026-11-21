@@ -1,6 +1,7 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { connection } from "next/server";
 import { getDb } from "@/db/client";
 import { householdMembers, households } from "@/db/schema";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -13,6 +14,7 @@ export type CurrentMember = {
 };
 
 async function getAuthenticatedUserId() {
+  await connection();
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase.auth.getClaims();
   const userId = data?.claims?.sub;
