@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBRL, formatDate, formatDateTime, formatTransactionChanges } from "./format";
+import { formatBRL, formatDate, formatDateTime, formatIsoDate, formatTransactionChanges } from "./format";
 
 const semEspacoEspecial = (texto: string) => texto.replace(/\s/g, " ");
 
@@ -33,5 +33,11 @@ describe("formatTransactionChanges", () => {
     [{ created: 4, updated: 2, removed: 1 }, "4 transações novas, 2 alteradas e 1 removida"],
   ])("descreve %o", (changes, esperado) => {
     expect(formatTransactionChanges(changes)).toBe(esperado);
+  });
+});
+
+describe("formatIsoDate", () => {
+  it("formata a data sem converter fuso horário", () => {
+    expect(formatIsoDate("2026-11-03")).toBe("03/11/2026");
   });
 });

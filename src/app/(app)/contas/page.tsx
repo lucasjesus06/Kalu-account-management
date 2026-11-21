@@ -7,8 +7,9 @@ import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { fromCents } from "@/domain/money";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatIsoDate } from "@/lib/format";
 import { listHouseholdAccounts } from "@/server/accounts";
+import { listHouseholdCardBills } from "@/server/bills";
 import { getCurrentMember } from "@/server/auth";
 
 export const metadata: Metadata = {
@@ -32,7 +33,10 @@ async function AccountsContent() {
     return <p className="text-muted-foreground">Sua conta ainda não está vinculada a uma residência.</p>;
   }
 
-  const accounts = await listHouseholdAccounts(member.householdId);
+  const [accounts, cardBills] = await Promise.all([
+    listHouseholdAccounts(member.householdId),
+    listHouseholdCardBills(member.householdId),
+  ]);
 
   if (accounts.length === 0) {
     return (
@@ -73,6 +77,8 @@ async function AccountsContent() {
       <ul className="grid gap-4 lg:grid-cols-2">
         {accounts.map((account) => {
           const isCard = account.kind === "credit_card";
+          const bills = cardBills.get(account.id);
+          const lastBill = bills?.closed[0];
           const usedRatio =
             isCard && account.creditLimitCents
               ? Math.min(100, Math.round(((account.creditUsedCents ?? 0) / account.creditLimitCents) * 100))
@@ -109,6 +115,45 @@ async function AccountsContent() {
                 <div className="flex flex-col gap-2">
                   <span className="text-sm text-muted-foreground">Saldo</span>
                   <Money value={fromCents(account.balanceCents)} className="font-display text-2xl font-bold" />
+                </div>
+              )}
+
+              {bills && (
+                <div className="grid grid-cols-2 gap-4 border-t pt-4">
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="text-sm text-muted-foreground">Fatura aberta</span>
+                    <Money value={fromCents(bills.open.netCents)} className="font-display text-lg font-bold" />
+                    <span className="text-xs text-muted-foreground">
+                      {plural(bills.open.purchasesCount, "compra", "compras")}
+                      {bills.open.pendingCents > 0 && (
+                        <>
+                          {" "}
+                          · <Money value={fromCents(bills.open.pendingCents)} /> pendente
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  {lastBill && (
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <span className="text-sm text-muted-foreground">Última fatura</span>
+                      <Money value={fromCents(lastBill.officialTotalCents)} className="font-display text-lg font-bold" />
+                      <span className="text-xs text-muted-foreground">
+                        Venc. {formatIsoDate(lastBill.dueDate)} ·{" "}
+                        {lastBill.unidentifiedCents > 0 ? (
+                          <>
+                            <Money value={fromCents(lastBill.unidentifiedCents)} /> não identificado pela fonte
+                          </>
+                        ) : lastBill.unidentifiedCents < 0 ? (
+                          <>
+                            compras <Money value={fromCents(-lastBill.unidentifiedCents)} /> acima do valor oficial
+                          </>
+                        ) : (
+                          "totalmente identificada"
+                        )}
+                        {lastBill.incomplete && " · histórico incompleto"}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
