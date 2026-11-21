@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { Suspense } from "react";
+import { KeyRound, Plug } from "lucide-react";
+import { PageHeader } from "@/components/page-header";
+import { Panel } from "@/components/panel";
+import { StatusBadge } from "@/components/status-badge";
 import { getCurrentMember } from "@/server/auth";
 import { getCredentialsSummary, listConnections } from "@/server/connections";
 import { ConnectionForm } from "./connection-form";
@@ -10,11 +13,11 @@ export const metadata: Metadata = {
   title: "Conexões · Kalu",
 };
 
-const statusLabels = {
-  active: "Ativa",
-  expired: "Expirada",
-  revoked: "Revogada",
-  error: "Com erro",
+const statusBadges = {
+  active: { label: "Ativa", tone: "success" },
+  expired: { label: "Expirada", tone: "danger" },
+  revoked: { label: "Revogada", tone: "neutral" },
+  error: { label: "Com erro", tone: "warning" },
 } as const;
 
 const dateFormat = new Intl.DateTimeFormat("pt-BR", {
@@ -26,9 +29,7 @@ async function ConnectionsContent() {
   const member = await getCurrentMember();
 
   if (!member) {
-    return (
-      <p className="text-sm text-muted-foreground">Sua conta ainda não está vinculada a uma residência.</p>
-    );
+    return <p className="text-muted-foreground">Sua conta ainda não está vinculada a uma residência.</p>;
   }
 
   const [credentials, connections] = await Promise.all([
@@ -37,55 +38,61 @@ async function ConnectionsContent() {
   ]);
 
   return (
-    <>
-      <section className="flex flex-col gap-4 rounded-lg border bg-card p-5 text-card-foreground">
-        <div className="flex flex-col gap-1">
-          <h2 className="font-medium">Credenciais da Pluggy</h2>
-          <p className="text-sm text-muted-foreground">
-            {credentials
-              ? `Client ID ${credentials.clientId.slice(0, 8)}… · atualizadas em ${dateFormat.format(credentials.updatedAt)}`
-              : "Informe o Client ID e o Client Secret da sua aplicação no Dashboard da Pluggy."}
+    <div className="grid items-start gap-4 lg:grid-cols-2">
+      <Panel
+        title={connections.length === 1 ? "1 instituição" : `${connections.length} instituições`}
+        icon={Plug}
+      >
+        {connections.length === 0 ? (
+          <p className="text-muted-foreground">
+            Nenhum banco conectado. Cada banco conectado no Meu Pluggy aparece como um item em Connected Items, no
+            Dashboard da Pluggy.
           </p>
-        </div>
-        <CredentialsForm hasCredentials={Boolean(credentials)} />
-      </section>
-
-      <section className="flex flex-col gap-4 rounded-lg border bg-card p-5 text-card-foreground">
-        <div className="flex flex-col gap-1">
-          <h2 className="font-medium">Bancos conectados</h2>
-          <p className="text-sm text-muted-foreground">
-            Cada banco conectado no Meu Pluggy aparece como um item em Connected Items, no Dashboard da Pluggy.
-          </p>
-        </div>
-
-        {connections.length > 0 && (
-          <ul className="flex flex-col divide-y rounded-md border">
-            {connections.map((connection) => (
-              <li key={connection.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                <span className="font-medium">{connection.institutionName ?? "Instituição"}</span>
-                <span className="text-muted-foreground">{statusLabels[connection.status]}</span>
-              </li>
-            ))}
+        ) : (
+          <ul className="flex flex-col divide-y">
+            {connections.map((connection) => {
+              const name = connection.institutionName ?? "Instituição";
+              const badge = statusBadges[connection.status];
+              return (
+                <li key={connection.id} className="flex items-center gap-4 py-4 first:pt-0 last:pb-0">
+                  <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-secondary font-display font-bold text-primary">
+                    {name.charAt(0).toUpperCase()}
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate font-semibold">{name}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {member.displayName} · adicionada em {dateFormat.format(connection.createdAt)}
+                    </span>
+                  </div>
+                  <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
+                </li>
+              );
+            })}
           </ul>
         )}
 
-        <ConnectionForm disabled={!credentials} />
-      </section>
-    </>
+        <div className="mt-6 border-t pt-6">
+          <ConnectionForm disabled={!credentials} />
+        </div>
+      </Panel>
+
+      <Panel title="Credenciais da Pluggy" icon={KeyRound}>
+        <p className="mb-5 text-sm text-muted-foreground">
+          {credentials
+            ? `Client ID ${credentials.clientId.slice(0, 8)}… · atualizadas em ${dateFormat.format(credentials.updatedAt)}`
+            : "Informe o Client ID e o Client Secret da sua aplicação no Dashboard da Pluggy."}
+        </p>
+        <CredentialsForm hasCredentials={Boolean(credentials)} />
+      </Panel>
+    </div>
   );
 }
 
 export default function ConnectionsPage() {
   return (
-    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-6 py-12">
-      <header className="flex flex-col gap-2">
-        <Link href="/" className="text-sm text-muted-foreground">
-          ← Início
-        </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Conexões</h1>
-      </header>
-
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
+    <div className="flex flex-col gap-8">
+      <PageHeader title="Conexões" description="Bancos conectados via Open Finance." />
+      <Suspense fallback={<p className="text-muted-foreground">Carregando…</p>}>
         <ConnectionsContent />
       </Suspense>
     </div>
