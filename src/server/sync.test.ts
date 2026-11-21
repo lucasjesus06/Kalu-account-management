@@ -19,7 +19,7 @@ const state = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock("@/db/client", () => ({ getDb: () => state.db }));
 
 const { encrypt } = await import("./crypto");
-const { latestSyncRuns, syncConnection } = await import("./sync");
+const { latestSyncRuns, syncAllConnections, syncConnection } = await import("./sync");
 const { listHouseholdAccounts } = await import("./accounts");
 
 type TestDb = Awaited<ReturnType<typeof createTestDatabase>>;
@@ -31,6 +31,8 @@ const NOVEMBER_BILL = "0c15574b-9488-4556-a388-d3891cd01bfd";
 const PENDING_ID = "aa11aa11-0000-4000-8000-000000000001";
 
 type Fixtures = {
+  item: Record<string, unknown>;
+  accounts: typeof accountsFixture.results;
   cardTransactions: typeof cardTransactionsFixture.results;
   bills: typeof billsFixture.results;
   authStatus: number;
@@ -40,6 +42,7 @@ type Fixtures = {
 let fixtures: Fixtures;
 let connectionId: string;
 let householdId: string;
+let karinaId: string;
 
 function simulatePluggy() {
   vi.stubGlobal(
@@ -50,8 +53,11 @@ function simulatePluggy() {
       if (url.pathname === "/auth") {
         return fixtures.authStatus === 200 ? json(200, { apiKey: "chave" }) : json(fixtures.authStatus);
       }
+      if (url.pathname === `/items/${ITEM_ID}`) {
+        return json(200, fixtures.item);
+      }
       if (url.pathname === "/accounts") {
-        return fixtures.accountsStatus === 200 ? json(200, accountsFixture) : json(fixtures.accountsStatus);
+        return fixtures.accountsStatus === 200 ? json(200, { results: fixtures.accounts }) : json(fixtures.accountsStatus);
       }
       if (url.pathname === "/bills") {
         return json(200, { totalPages: 1, results: fixtures.bills });
@@ -69,8 +75,9 @@ function simulatePluggy() {
 beforeEach(async () => {
   vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
   state.db = await createTestDatabase();
-  const { household, lucas } = await seedHousehold(db());
+  const { household, lucas, karina } = await seedHousehold(db());
   householdId = household.id;
+  karinaId = karina.id;
   await db()
     .insert(pluggyCredentials)
     .values({ memberId: lucas.id, clientId: "593ce5a5-bd0f-47d1-af52-50d0acb74bee", clientSecretEncrypted: encrypt("segredo") });
@@ -80,6 +87,8 @@ beforeEach(async () => {
     .returning();
   connectionId = connection.id;
   fixtures = {
+    item: { id: ITEM_ID, status: "UPDATED", connector: { name: "Santander" } },
+    accounts: structuredClone(accountsFixture.results),
     cardTransactions: structuredClone(cardTransactionsFixture.results),
     bills: structuredClone(billsFixture.results),
     authStatus: 200,
@@ -246,5 +255,124 @@ describe("listHouseholdAccounts", () => {
     const { household: outra } = await seedHousehold(db());
 
     expect(await listHouseholdAccounts(outra.id)).toEqual([]);
+  });
+});
+
+describe("trava de sincronização", () => {
+  it("não inicia outra sincronização enquanto uma está em andamento", async () => {
+    await db().insert(syncRuns).values({ connectionId });
+
+    const result = await syncConnection(connectionId);
+
+    expect(result).toEqual({ ok: false, error: "Já existe uma sincronização em andamento para esta conexão." });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(await counts()).toEqual({ accounts: 0, bills: 0, transactions: 0 });
+  });
+
+  it("libera execução travada há mais de 15 minutos", async () => {
+    await db()
+      .insert(syncRuns)
+      .values({ connectionId, startedAt: new Date(Date.now() - 16 * 60 * 1000) });
+
+    const result = await syncConnection(connectionId);
+
+    expect(result.ok).toBe(true);
+    const runs = await db().select().from(syncRuns).orderBy(asc(syncRuns.startedAt));
+    expect(runs.map((r) => [r.status, r.error])).toEqual([
+      ["failed", "Sincronização interrompida antes de terminar."],
+      ["succeeded", null],
+    ]);
+  });
+
+  it("duas sincronizações ao mesmo tempo: só uma roda", async () => {
+    const results = await Promise.all([syncConnection(connectionId), syncConnection(connectionId)]);
+
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.filter((r) => !r.ok)).toEqual([
+      { ok: false, error: "Já existe uma sincronização em andamento para esta conexão." },
+    ]);
+    expect(await counts()).toEqual({ accounts: 2, bills: 2, transactions: 10 });
+  });
+});
+
+describe("autorização expirada", () => {
+  const expiredMessage = "A autorização desta conexão expirou. Renove a conexão no Meu Pluggy para voltar a sincronizar.";
+
+  async function connectionStatus() {
+    const [connection] = await db().select().from(integrationConnections);
+    return connection;
+  }
+
+  it.each([
+    ["código de erro da Pluggy", { error: { code: "USER_AUTHORIZATION_EXPIRED" } }],
+    ["item com erro de login", { status: "LOGIN_ERROR" }],
+  ])("detecta pelo %s e não altera os dados", async (_motivo, item) => {
+    await syncConnection(connectionId);
+    fixtures.item = { ...fixtures.item, ...item };
+
+    const result = await syncConnection(connectionId);
+
+    expect(result).toEqual({ ok: false, error: expiredMessage });
+    expect((await connectionStatus()).status).toBe("expired");
+    expect(await counts()).toEqual({ accounts: 2, bills: 2, transactions: 10 });
+  });
+
+  it("detecta pela data de validade vencida", async () => {
+    await db().update(integrationConnections).set({ authorizationExpiresAt: new Date(Date.now() - 1000) });
+
+    const result = await syncConnection(connectionId);
+
+    expect(result).toEqual({ ok: false, error: expiredMessage });
+    expect((await connectionStatus()).status).toBe("expired");
+  });
+
+  it("atualiza a validade quando a Pluggy informa uma nova data", async () => {
+    await db().update(integrationConnections).set({ authorizationExpiresAt: new Date(Date.now() - 1000) });
+    fixtures.item = { ...fixtures.item, consentExpiresAt: "2099-01-01T00:00:00.000Z" };
+
+    const result = await syncConnection(connectionId);
+
+    expect(result.ok).toBe(true);
+    expect((await connectionStatus()).authorizationExpiresAt).toEqual(new Date("2099-01-01T00:00:00.000Z"));
+  });
+
+  it("trata retorno sem contas, de uma conexão que já tinha contas, como falha", async () => {
+    await syncConnection(connectionId);
+    fixtures.accounts = [];
+
+    const result = await syncConnection(connectionId);
+
+    expect(result).toEqual({ ok: false, error: expect.stringContaining("não retornou nenhuma conta") });
+    expect((await connectionStatus()).status).toBe("error");
+    expect(await counts()).toEqual({ accounts: 2, bills: 2, transactions: 10 });
+  });
+
+  it("aceita conexão nova ainda sem contas", async () => {
+    fixtures.accounts = [];
+
+    const result = await syncConnection(connectionId);
+
+    expect(result).toEqual({ ok: true, accounts: 0, bills: 0, transactions: 0 });
+  });
+});
+
+describe("syncAllConnections", () => {
+  it("sincroniza cada conexão, sem que a falha de uma impeça as outras, e ignora as revogadas", async () => {
+    const [semCredenciais] = await db()
+      .insert(integrationConnections)
+      .values({ memberId: karinaId, externalItemId: "item-da-karina", institutionName: "Nubank" })
+      .returning();
+    await db()
+      .insert(integrationConnections)
+      .values({ memberId: karinaId, externalItemId: "item-revogado", institutionName: "Inter", status: "revoked" });
+
+    const summary = await syncAllConnections();
+
+    expect(summary).toMatchObject({ total: 2, succeeded: 1, failed: 1 });
+    expect(summary.results).toEqual([
+      { connectionId, result: { ok: true, accounts: 2, bills: 2, transactions: 10 } },
+      { connectionId: semCredenciais.id, result: { ok: false, error: expect.any(String) } },
+    ]);
+    expect(await db().$count(syncRuns)).toBe(2);
   });
 });

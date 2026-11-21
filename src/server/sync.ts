@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, ne, notInArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   creditCardBills,
@@ -12,6 +12,7 @@ import {
 import type { ImportedAccount, ImportedBill, ImportedTransaction } from "@/domain/imported";
 import {
   authenticate,
+  getItem,
   listAccounts,
   listBills,
   listTransactions,
@@ -28,8 +29,15 @@ type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 const CHUNK_SIZE = 500;
+const STALE_RUN_MINUTES = 15;
 
 class SyncError extends Error {}
+
+class AuthorizationExpiredError extends Error {}
+
+class EmptySourceError extends Error {}
+
+const EXPIRED_ERROR_CODES = new Set(["USER_AUTHORIZATION_EXPIRED", "USER_AUTHORIZATION_REVOKED"]);
 
 function chunk<T>(items: T[]) {
   const chunks: T[][] = [];
@@ -163,6 +171,12 @@ function describeError(error: unknown) {
   if (error instanceof SyncError) {
     return error.message;
   }
+  if (error instanceof AuthorizationExpiredError) {
+    return "A autorização desta conexão expirou. Renove a conexão no Meu Pluggy para voltar a sincronizar.";
+  }
+  if (error instanceof EmptySourceError) {
+    return "A Pluggy não retornou nenhuma conta desta conexão, o que costuma indicar autorização expirada. Nenhum dado foi alterado.";
+  }
   if (error instanceof PluggyAuthError) {
     return "A Pluggy recusou as credenciais desta conexão. Cadastre-as novamente.";
   }
@@ -179,6 +193,7 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
       id: integrationConnections.id,
       memberId: integrationConnections.memberId,
       externalItemId: integrationConnections.externalItemId,
+      authorizationExpiresAt: integrationConnections.authorizationExpiresAt,
     })
     .from(integrationConnections)
     .where(eq(integrationConnections.id, connectionId))
@@ -188,7 +203,21 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
     return { ok: false, error: "Conexão não encontrada." };
   }
 
-  const [run] = await db.insert(syncRuns).values({ connectionId }).returning({ id: syncRuns.id });
+  await db
+    .update(syncRuns)
+    .set({ status: "failed", error: "Sincronização interrompida antes de terminar.", finishedAt: new Date() })
+    .where(
+      and(
+        eq(syncRuns.connectionId, connectionId),
+        eq(syncRuns.status, "running"),
+        lt(syncRuns.startedAt, new Date(Date.now() - STALE_RUN_MINUTES * 60 * 1000)),
+      ),
+    );
+
+  const [run] = await db.insert(syncRuns).values({ connectionId }).onConflictDoNothing().returning({ id: syncRuns.id });
+  if (!run) {
+    return { ok: false, error: "Já existe uma sincronização em andamento para esta conexão." };
+  }
 
   try {
     const [credentials] = await db
@@ -204,7 +233,26 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
       clientId: credentials.clientId,
       clientSecret: decrypt(credentials.clientSecretEncrypted),
     });
+    const item = await getItem(apiKey, connection.externalItemId);
+    const authorizationExpiresAt = item.consentExpiresAt ?? connection.authorizationExpiresAt;
+    if (item.consentExpiresAt) {
+      await db
+        .update(integrationConnections)
+        .set({ authorizationExpiresAt: item.consentExpiresAt })
+        .where(eq(integrationConnections.id, connection.id));
+    }
+    if (
+      (item.errorCode && EXPIRED_ERROR_CODES.has(item.errorCode)) ||
+      item.status === "LOGIN_ERROR" ||
+      (authorizationExpiresAt && authorizationExpiresAt.getTime() <= Date.now())
+    ) {
+      throw new AuthorizationExpiredError();
+    }
+
     const accounts = await listAccounts(apiKey, connection.externalItemId);
+    if (accounts.length === 0 && (await db.$count(financialAccounts, eq(financialAccounts.connectionId, connection.id))) > 0) {
+      throw new EmptySourceError();
+    }
 
     let billsCount = 0;
     let transactionsCount = 0;
@@ -241,7 +289,12 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
     return { ok: true, accounts: accounts.length, bills: billsCount, transactions: transactionsCount };
   } catch (error) {
     const message = describeError(error);
-    if (error instanceof PluggyAuthError || error instanceof PluggyNotFoundError) {
+    if (error instanceof AuthorizationExpiredError) {
+      await db
+        .update(integrationConnections)
+        .set({ status: "expired" })
+        .where(eq(integrationConnections.id, connection.id));
+    } else if (error instanceof PluggyAuthError || error instanceof PluggyNotFoundError || error instanceof EmptySourceError) {
       await db
         .update(integrationConnections)
         .set({ status: "error" })
@@ -255,6 +308,33 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
       .where(eq(syncRuns.id, run.id));
     return { ok: false, error: message };
   }
+}
+
+export type SyncAllSummary = {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: { connectionId: string; result: SyncResult }[];
+};
+
+export async function syncAllConnections(): Promise<SyncAllSummary> {
+  const connections = await getDb()
+    .select({ id: integrationConnections.id })
+    .from(integrationConnections)
+    .where(ne(integrationConnections.status, "revoked"))
+    .orderBy(asc(integrationConnections.createdAt));
+
+  const results: SyncAllSummary["results"] = [];
+  for (const connection of connections) {
+    const result = await syncConnection(connection.id).catch((error: unknown): SyncResult => {
+      console.error("Falha inesperada ao sincronizar conexão", connection.id, error);
+      return { ok: false, error: "Falha inesperada ao sincronizar." };
+    });
+    results.push({ connectionId: connection.id, result });
+  }
+
+  const succeeded = results.filter(({ result }) => result.ok).length;
+  return { total: results.length, succeeded, failed: results.length - succeeded, results };
 }
 
 export async function latestSyncRuns(connectionIds: string[]) {

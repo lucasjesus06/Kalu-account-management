@@ -121,6 +121,33 @@ describe("addConnection", () => {
     expect(chamadas).toEqual(["segredo-original"]);
   });
 
+  it("registra a validade da autorização: um ano quando a Pluggy não informa", async () => {
+    simularPluggy(pluggyOk);
+    await saveCredentials(membros.lucas.id, CLIENT_ID, "segredo");
+    const antes = Date.now();
+
+    await addConnection(membros.lucas.id, ITEM_ID);
+
+    const [conexao] = await listConnections(membros.lucas.id);
+    const dias = (conexao.authorizationExpiresAt!.getTime() - antes) / 86_400_000;
+    expect(dias).toBeGreaterThan(364.9);
+    expect(dias).toBeLessThan(365.1);
+  });
+
+  it("usa a validade informada pela Pluggy quando existe", async () => {
+    simularPluggy((url) =>
+      url.endsWith("/auth")
+        ? { status: 200, body: { apiKey: "chave" } }
+        : { status: 200, body: { id: ITEM_ID, connector: { name: "Santander" }, consentExpiresAt: "2027-03-01T00:00:00.000Z" } },
+    );
+    await saveCredentials(membros.lucas.id, CLIENT_ID, "segredo");
+
+    await addConnection(membros.lucas.id, ITEM_ID);
+
+    const [conexao] = await listConnections(membros.lucas.id);
+    expect(conexao.authorizationExpiresAt).toEqual(new Date("2027-03-01T00:00:00.000Z"));
+  });
+
   it("não duplica a mesma conexão", async () => {
     simularPluggy(pluggyOk);
     await saveCredentials(membros.lucas.id, CLIENT_ID, "segredo");

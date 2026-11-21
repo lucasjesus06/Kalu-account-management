@@ -29,6 +29,20 @@
       "when": 1795297441216,
       "tag": "0003_contas_faturas_transacoes",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795298861714,
+      "tag": "0004_trava_sincronizacao",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795298933552,
+      "tag": "0005_validade_autorizacao",
+      "breakpoints": true
     }
   ]
 }

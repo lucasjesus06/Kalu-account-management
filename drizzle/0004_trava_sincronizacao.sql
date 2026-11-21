@@ -1,0 +1,2 @@
+UPDATE "sync_runs" SET "status" = 'failed', "error" = 'Sincronização interrompida antes de terminar.', "finished_at" = now() WHERE "status" = 'running';--> statement-breakpoint
+CREATE UNIQUE INDEX "sync_runs_one_running_per_connection_idx" ON "sync_runs" USING btree ("connection_id") WHERE "sync_runs"."status" = 'running';
