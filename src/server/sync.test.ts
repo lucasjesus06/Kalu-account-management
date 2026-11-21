@@ -114,7 +114,13 @@ describe("syncConnection", () => {
   it("importa contas, faturas e transações", async () => {
     const result = await syncConnection(connectionId);
 
-    expect(result).toEqual({ ok: true, accounts: 2, bills: 2, transactions: 10 });
+    expect(result).toEqual({
+      ok: true,
+      accounts: 2,
+      bills: 2,
+      transactions: 10,
+      changes: { created: 10, updated: 0, removed: 0 },
+    });
     expect(await counts()).toEqual({ accounts: 2, bills: 2, transactions: 10 });
 
     const [card] = await db().select().from(financialAccounts).where(eq(financialAccounts.externalId, CARD_ID));
@@ -142,8 +148,36 @@ describe("syncConnection", () => {
     await syncConnection(connectionId);
     const second = await syncConnection(connectionId);
 
-    expect(second.ok).toBe(true);
+    expect(second).toMatchObject({ ok: true, changes: { created: 0, updated: 0, removed: 0 } });
     expect(await counts()).toEqual({ accounts: 2, bills: 2, transactions: 10 });
+  });
+
+  it("não regrava o que não mudou", async () => {
+    await syncConnection(connectionId);
+    const transactionsBefore = await db().select({ id: transactions.id, updatedAt: transactions.updatedAt }).from(transactions);
+    const accountsBefore = await db().select({ id: financialAccounts.id, updatedAt: financialAccounts.updatedAt }).from(financialAccounts);
+
+    await syncConnection(connectionId);
+
+    const transactionsAfter = await db().select({ id: transactions.id, updatedAt: transactions.updatedAt }).from(transactions);
+    const accountsAfter = await db().select({ id: financialAccounts.id, updatedAt: financialAccounts.updatedAt }).from(financialAccounts);
+    expect(transactionsAfter).toEqual(expect.arrayContaining(transactionsBefore));
+    expect(accountsAfter).toEqual(expect.arrayContaining(accountsBefore));
+  });
+
+  it("vincula à fatura uma compra já importada quando a fatura chega depois", async () => {
+    fixtures.bills = [];
+    await syncConnection(connectionId);
+    fixtures.bills = structuredClone(billsFixture.results);
+
+    const result = await syncConnection(connectionId);
+
+    const [purchase] = await db()
+      .select()
+      .from(transactions)
+      .where(eq(transactions.externalId, "aa11aa11-0000-4000-8000-000000000004"));
+    expect(purchase.billId).not.toBeNull();
+    expect(result).toMatchObject({ changes: { created: 0, updated: 5, removed: 0 } });
   });
 
   it("atualiza transação existente quando a fonte muda", async () => {
@@ -152,20 +186,22 @@ describe("syncConnection", () => {
       t.id === PENDING_ID ? { ...t, status: "POSTED", amount: 7.5 } : t,
     );
 
-    await syncConnection(connectionId);
+    const result = await syncConnection(connectionId);
 
     const [updated] = await db().select().from(transactions).where(eq(transactions.externalId, PENDING_ID));
     expect(updated).toMatchObject({ status: "posted", amountCents: 750 });
+    expect(result).toMatchObject({ changes: { created: 0, updated: 1, removed: 0 } });
   });
 
   it("remove transação pendente que a fonte deixou de enviar", async () => {
     await syncConnection(connectionId);
     fixtures.cardTransactions = fixtures.cardTransactions.filter((t) => t.id !== PENDING_ID);
 
-    await syncConnection(connectionId);
+    const result = await syncConnection(connectionId);
 
     expect(await db().$count(transactions, eq(transactions.externalId, PENDING_ID))).toBe(0);
     expect(await db().$count(transactions)).toBe(9);
+    expect(result).toMatchObject({ changes: { created: 0, updated: 0, removed: 1 } });
   });
 
   it("mantém transação já lançada mesmo que a fonte deixe de enviar", async () => {
@@ -193,7 +229,16 @@ describe("syncConnection", () => {
     await syncConnection(connectionId);
 
     const [run] = await db().select().from(syncRuns);
-    expect(run).toMatchObject({ status: "succeeded", accountsCount: 2, billsCount: 2, transactionsCount: 10, error: null });
+    expect(run).toMatchObject({
+      status: "succeeded",
+      accountsCount: 2,
+      billsCount: 2,
+      transactionsCount: 10,
+      transactionsCreated: 10,
+      transactionsUpdated: 0,
+      transactionsRemoved: 0,
+      error: null,
+    });
     expect(run.finishedAt).toBeInstanceOf(Date);
     const [connection] = await db().select().from(integrationConnections);
     expect(connection.lastSyncedAt).toBeInstanceOf(Date);
@@ -352,7 +397,13 @@ describe("autorização expirada", () => {
 
     const result = await syncConnection(connectionId);
 
-    expect(result).toEqual({ ok: true, accounts: 0, bills: 0, transactions: 0 });
+    expect(result).toEqual({
+      ok: true,
+      accounts: 0,
+      bills: 0,
+      transactions: 0,
+      changes: { created: 0, updated: 0, removed: 0 },
+    });
   });
 });
 
@@ -370,7 +421,7 @@ describe("syncAllConnections", () => {
 
     expect(summary).toMatchObject({ total: 2, succeeded: 1, failed: 1 });
     expect(summary.results).toEqual([
-      { connectionId, result: { ok: true, accounts: 2, bills: 2, transactions: 10 } },
+      { connectionId, result: expect.objectContaining({ ok: true, transactions: 10 }) },
       { connectionId: semCredenciais.id, result: { ok: false, error: expect.any(String) } },
     ]);
     expect(await db().$count(syncRuns)).toBe(2);

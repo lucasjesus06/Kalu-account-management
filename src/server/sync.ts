@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, inArray, lt, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   creditCardBills,
@@ -9,6 +9,7 @@ import {
   syncRuns,
   transactions,
 } from "@/db/schema";
+import { detectChanges, hasChanged } from "@/domain/changes";
 import type { ImportedAccount, ImportedBill, ImportedTransaction } from "@/domain/imported";
 import {
   authenticate,
@@ -22,7 +23,7 @@ import {
 import { decrypt } from "./crypto";
 
 export type SyncResult =
-  | { ok: true; accounts: number; bills: number; transactions: number }
+  | { ok: true; accounts: number; bills: number; transactions: number; changes: TransactionChanges }
   | { ok: false; error: string };
 
 type Db = ReturnType<typeof getDb>;
@@ -49,7 +50,22 @@ function chunk<T>(items: T[]) {
 
 const excluded = (column: string) => sql.raw(`excluded.${column}`);
 
-async function upsertAccount(tx: Tx, connectionId: string, account: ImportedAccount) {
+export type TransactionChanges = { created: number; updated: number; removed: number };
+
+const accountFields = {
+  kind: financialAccounts.kind,
+  name: financialAccounts.name,
+  numberLast4: financialAccounts.numberLast4,
+  currency: financialAccounts.currency,
+  balanceCents: financialAccounts.balanceCents,
+  creditLimitCents: financialAccounts.creditLimitCents,
+  creditAvailableCents: financialAccounts.creditAvailableCents,
+  creditUsedCents: financialAccounts.creditUsedCents,
+  cardBrand: financialAccounts.cardBrand,
+  lastBillDueDate: financialAccounts.lastBillDueDate,
+};
+
+async function saveAccount(tx: Tx, connectionId: string, account: ImportedAccount) {
   const values = {
     kind: account.kind,
     name: account.name,
@@ -63,32 +79,60 @@ async function upsertAccount(tx: Tx, connectionId: string, account: ImportedAcco
     lastBillDueDate: account.credit?.lastBillDueDate ?? null,
   };
 
-  const [row] = await tx
-    .insert(financialAccounts)
-    .values({ connectionId, externalId: account.externalId, ...values })
-    .onConflictDoUpdate({
-      target: [financialAccounts.connectionId, financialAccounts.externalId],
-      set: { ...values, updatedAt: new Date() },
-    })
-    .returning({ id: financialAccounts.id });
+  const [stored] = await tx
+    .select({ id: financialAccounts.id, ...accountFields })
+    .from(financialAccounts)
+    .where(and(eq(financialAccounts.connectionId, connectionId), eq(financialAccounts.externalId, account.externalId)));
 
-  return row.id;
+  if (!stored) {
+    const [created] = await tx
+      .insert(financialAccounts)
+      .values({ connectionId, externalId: account.externalId, ...values })
+      .returning({ id: financialAccounts.id });
+    return created.id;
+  }
+
+  if (hasChanged(values, stored)) {
+    await tx
+      .update(financialAccounts)
+      .set({ ...values, updatedAt: new Date() })
+      .where(eq(financialAccounts.id, stored.id));
+  }
+  return stored.id;
 }
 
-async function upsertBills(tx: Tx, accountId: string, bills: ImportedBill[]) {
-  for (const batch of chunk(bills)) {
-    await tx
+const billFields = {
+  externalId: creditCardBills.externalId,
+  dueDate: creditCardBills.dueDate,
+  totalCents: creditCardBills.totalCents,
+  minimumPaymentCents: creditCardBills.minimumPaymentCents,
+  currency: creditCardBills.currency,
+};
+
+async function saveBills(tx: Tx, accountId: string, bills: ImportedBill[]) {
+  const stored = await tx
+    .select({ id: creditCardBills.id, ...billFields })
+    .from(creditCardBills)
+    .where(eq(creditCardBills.accountId, accountId));
+  const billIds = new Map(stored.map((row) => [row.externalId, row.id]));
+
+  const incoming = bills.map((bill) => ({
+    externalId: bill.externalId,
+    dueDate: bill.dueDate,
+    totalCents: bill.totalCents,
+    minimumPaymentCents: bill.minimumPaymentCents,
+    currency: bill.currency,
+  }));
+  const { created, updated } = detectChanges(
+    incoming,
+    new Map(stored.map((row) => [row.externalId, row])),
+    (bill) => bill.externalId,
+  );
+
+  for (const batch of chunk([...created, ...updated])) {
+    const written = await tx
       .insert(creditCardBills)
-      .values(
-        batch.map((bill) => ({
-          accountId,
-          externalId: bill.externalId,
-          dueDate: bill.dueDate,
-          totalCents: bill.totalCents,
-          minimumPaymentCents: bill.minimumPaymentCents,
-          currency: bill.currency,
-        })),
-      )
+      .values(batch.map((bill) => ({ accountId, ...bill })))
       .onConflictDoUpdate({
         target: [creditCardBills.accountId, creditCardBills.externalId],
         set: {
@@ -98,42 +142,61 @@ async function upsertBills(tx: Tx, accountId: string, bills: ImportedBill[]) {
           currency: excluded("currency"),
           updatedAt: new Date(),
         },
-      });
+      })
+      .returning({ id: creditCardBills.id, externalId: creditCardBills.externalId });
+    written.forEach((row) => billIds.set(row.externalId, row.id));
   }
 
-  const stored = await tx
-    .select({ id: creditCardBills.id, externalId: creditCardBills.externalId })
-    .from(creditCardBills)
-    .where(eq(creditCardBills.accountId, accountId));
-  return new Map(stored.map((row) => [row.externalId, row.id]));
+  return billIds;
 }
 
-async function upsertTransactions(
+const transactionFields = {
+  externalId: transactions.externalId,
+  occurredAt: transactions.occurredAt,
+  description: transactions.description,
+  amountCents: transactions.amountCents,
+  direction: transactions.direction,
+  status: transactions.status,
+  currency: transactions.currency,
+  billId: transactions.billId,
+  billExternalId: transactions.billExternalId,
+  installmentNumber: transactions.installmentNumber,
+  installmentTotal: transactions.installmentTotal,
+  providerCategory: transactions.providerCategory,
+};
+
+async function saveTransactions(
   tx: Tx,
   accountId: string,
   imported: ImportedTransaction[],
   billIds: Map<string, string>,
-) {
-  for (const batch of chunk(imported)) {
+): Promise<TransactionChanges> {
+  const stored = await tx.select(transactionFields).from(transactions).where(eq(transactions.accountId, accountId));
+
+  const incoming = imported.map((transaction) => ({
+    externalId: transaction.externalId,
+    occurredAt: new Date(transaction.occurredAt),
+    description: transaction.description,
+    amountCents: transaction.amountCents,
+    direction: transaction.direction,
+    status: transaction.status,
+    currency: transaction.currency,
+    billId: transaction.billExternalId ? (billIds.get(transaction.billExternalId) ?? null) : null,
+    billExternalId: transaction.billExternalId,
+    installmentNumber: transaction.installment?.number ?? null,
+    installmentTotal: transaction.installment?.total ?? null,
+    providerCategory: transaction.providerCategory,
+  }));
+  const { created, updated } = detectChanges(
+    incoming,
+    new Map(stored.map((row) => [row.externalId, row])),
+    (transaction) => transaction.externalId,
+  );
+
+  for (const batch of chunk([...created, ...updated])) {
     await tx
       .insert(transactions)
-      .values(
-        batch.map((transaction) => ({
-          accountId,
-          externalId: transaction.externalId,
-          occurredAt: new Date(transaction.occurredAt),
-          description: transaction.description,
-          amountCents: transaction.amountCents,
-          direction: transaction.direction,
-          status: transaction.status,
-          currency: transaction.currency,
-          billId: transaction.billExternalId ? (billIds.get(transaction.billExternalId) ?? null) : null,
-          billExternalId: transaction.billExternalId,
-          installmentNumber: transaction.installment?.number ?? null,
-          installmentTotal: transaction.installment?.total ?? null,
-          providerCategory: transaction.providerCategory,
-        })),
-      )
+      .values(batch.map((transaction) => ({ accountId, ...transaction })))
       .onConflictDoUpdate({
         target: [transactions.accountId, transactions.externalId],
         set: {
@@ -153,18 +216,15 @@ async function upsertTransactions(
       });
   }
 
-  await tx
-    .delete(transactions)
-    .where(
-      and(
-        eq(transactions.accountId, accountId),
-        eq(transactions.status, "pending"),
-        notInArray(
-          transactions.externalId,
-          imported.map((transaction) => transaction.externalId),
-        ),
-      ),
-    );
+  const incomingIds = new Set(incoming.map((transaction) => transaction.externalId));
+  const vanished = stored
+    .filter((row) => row.status === "pending" && !incomingIds.has(row.externalId))
+    .map((row) => row.externalId);
+  for (const batch of chunk(vanished)) {
+    await tx.delete(transactions).where(and(eq(transactions.accountId, accountId), inArray(transactions.externalId, batch)));
+  }
+
+  return { created: created.length, updated: updated.length, removed: vanished.length };
 }
 
 function describeError(error: unknown) {
@@ -256,15 +316,19 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
 
     let billsCount = 0;
     let transactionsCount = 0;
+    const changes: TransactionChanges = { created: 0, updated: 0, removed: 0 };
     for (const account of accounts) {
       const bills = account.kind === "credit_card" ? await listBills(apiKey, account) : [];
       const imported = await listTransactions(apiKey, account);
 
-      await db.transaction(async (tx) => {
-        const accountId = await upsertAccount(tx, connection.id, account);
-        const billIds = await upsertBills(tx, accountId, bills);
-        await upsertTransactions(tx, accountId, imported, billIds);
+      const accountChanges = await db.transaction(async (tx) => {
+        const accountId = await saveAccount(tx, connection.id, account);
+        const billIds = await saveBills(tx, accountId, bills);
+        return saveTransactions(tx, accountId, imported, billIds);
       });
+      changes.created += accountChanges.created;
+      changes.updated += accountChanges.updated;
+      changes.removed += accountChanges.removed;
 
       billsCount += bills.length;
       transactionsCount += imported.length;
@@ -282,11 +346,14 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
         accountsCount: accounts.length,
         billsCount,
         transactionsCount,
+        transactionsCreated: changes.created,
+        transactionsUpdated: changes.updated,
+        transactionsRemoved: changes.removed,
         finishedAt,
       })
       .where(eq(syncRuns.id, run.id));
 
-    return { ok: true, accounts: accounts.length, bills: billsCount, transactions: transactionsCount };
+    return { ok: true, accounts: accounts.length, bills: billsCount, transactions: transactionsCount, changes };
   } catch (error) {
     const message = describeError(error);
     if (error instanceof AuthorizationExpiredError) {
@@ -339,7 +406,10 @@ export async function syncAllConnections(): Promise<SyncAllSummary> {
 
 export async function latestSyncRuns(connectionIds: string[]) {
   if (connectionIds.length === 0) {
-    return new Map<string, { status: string; error: string | null; startedAt: Date }>();
+    return new Map<
+      string,
+      { status: string; error: string | null; startedAt: Date; created: number; updated: number; removed: number }
+    >();
   }
   const runs = await getDb()
     .selectDistinctOn([syncRuns.connectionId], {
@@ -347,6 +417,9 @@ export async function latestSyncRuns(connectionIds: string[]) {
       status: syncRuns.status,
       error: syncRuns.error,
       startedAt: syncRuns.startedAt,
+      created: syncRuns.transactionsCreated,
+      updated: syncRuns.transactionsUpdated,
+      removed: syncRuns.transactionsRemoved,
     })
     .from(syncRuns)
     .where(inArray(syncRuns.connectionId, connectionIds))
