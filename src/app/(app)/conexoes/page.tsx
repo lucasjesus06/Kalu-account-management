@@ -7,7 +7,7 @@ import { Panel } from "@/components/panel";
 import { StatusBadge } from "@/components/status-badge";
 import { authorizationAlert } from "@/domain/authorization";
 import { getCurrentMember } from "@/server/auth";
-import { formatDate, formatDateTime } from "@/lib/format";
+import { formatDate, formatDateTime, formatTransactionChanges } from "@/lib/format";
 import { getCredentialsSummary, listConnections } from "@/server/connections";
 import { latestSyncRuns } from "@/server/sync";
 import { ConnectionForm } from "./connection-form";
@@ -70,6 +70,7 @@ async function ConnectionsContent() {
                         {connection.lastSyncedAt
                           ? `sincronizado em ${formatDateTime(connection.lastSyncedAt)}`
                           : "ainda não sincronizado"}
+                        {lastRun?.status === "succeeded" && ` · ${formatTransactionChanges(lastRun)}`}
                       </span>
                     </div>
                     <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBRL, formatDate, formatDateTime } from "./format";
+import { formatBRL, formatDate, formatDateTime, formatTransactionChanges } from "./format";
 
 const semEspacoEspecial = (texto: string) => texto.replace(/\s/g, " ");
 
@@ -21,5 +21,17 @@ describe("datas", () => {
     const meiaNoiteUtc = new Date("2026-11-22T02:30:00.000Z");
     expect(formatDate(meiaNoiteUtc)).toBe("21/11/2026");
     expect(formatDateTime(meiaNoiteUtc)).toBe("21/11/2026 às 23:30");
+  });
+});
+
+describe("formatTransactionChanges", () => {
+  it.each([
+    [{ created: 0, updated: 0, removed: 0 }, "nenhuma transação nova ou alterada"],
+    [{ created: 1, updated: 0, removed: 0 }, "1 transação nova"],
+    [{ created: 3, updated: 1, removed: 0 }, "3 transações novas e 1 alterada"],
+    [{ created: 0, updated: 2, removed: 1 }, "2 transações alteradas e 1 removida"],
+    [{ created: 4, updated: 2, removed: 1 }, "4 transações novas, 2 alteradas e 1 removida"],
+  ])("descreve %o", (changes, esperado) => {
+    expect(formatTransactionChanges(changes)).toBe(esperado);
   });
 });
