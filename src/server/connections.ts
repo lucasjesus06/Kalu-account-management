@@ -32,6 +32,7 @@ export async function listConnections(memberId: string) {
       externalItemId: integrationConnections.externalItemId,
       institutionName: integrationConnections.institutionName,
       status: integrationConnections.status,
+      lastSyncedAt: integrationConnections.lastSyncedAt,
       createdAt: integrationConnections.createdAt,
     })
     .from(integrationConnections)
