@@ -90,7 +90,19 @@ node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 3. Na tela **Conexões** do Kalu, informe o **Client ID** e o **Client Secret** da aplicação. Eles são validados na Pluggy antes de serem salvos, e o secret fica criptografado (AES-256-GCM) no banco.
 4. Adicione o **Item ID** de cada banco, copiado de **Connected Items** no Dashboard.
 
+5. Clique em **Sincronizar agora** em cada banco. As contas, faturas e transações aparecem na tela **Contas**.
+
 A `ENCRYPTION_KEY` não pode ser trocada sem cadastrar as credenciais de novo: os secrets salvos só podem ser lidos com a chave que os criptografou.
+
+## Sincronização
+
+A sincronização busca contas, faturas e transações na Pluggy e grava no banco:
+
+- Pode rodar quantas vezes for preciso: cada registro é identificado pelo identificador da fonte, então nada é duplicado e alterações da fonte (como uma transação pendente que foi lançada) atualizam o registro existente.
+- Transações pendentes que a fonte deixou de enviar são removidas; transações já lançadas nunca são apagadas.
+- Cada compra de cartão fica vinculada à sua fatura pelo identificador da fatura na fonte, nunca por data.
+- Valores são guardados em centavos inteiros.
+- Cada execução fica registrada em `sync_runs`, com totais ou mensagem de erro. Se a Pluggy recusar as credenciais ou não encontrar o banco, a conexão fica com status de erro até a próxima sincronização bem-sucedida.
 
 ## Testes
 
