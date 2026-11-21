@@ -19,7 +19,7 @@ const state = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock("@/db/client", () => ({ getDb: () => state.db }));
 
 const { encrypt } = await import("./crypto");
-const { latestSyncRuns, syncConnection } = await import("./sync");
+const { latestSyncRuns, syncAllConnections, syncConnection } = await import("./sync");
 const { listHouseholdAccounts } = await import("./accounts");
 
 type TestDb = Awaited<ReturnType<typeof createTestDatabase>>;
@@ -42,6 +42,7 @@ type Fixtures = {
 let fixtures: Fixtures;
 let connectionId: string;
 let householdId: string;
+let karinaId: string;
 
 function simulatePluggy() {
   vi.stubGlobal(
@@ -74,8 +75,9 @@ function simulatePluggy() {
 beforeEach(async () => {
   vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
   state.db = await createTestDatabase();
-  const { household, lucas } = await seedHousehold(db());
+  const { household, lucas, karina } = await seedHousehold(db());
   householdId = household.id;
+  karinaId = karina.id;
   await db()
     .insert(pluggyCredentials)
     .values({ memberId: lucas.id, clientId: "593ce5a5-bd0f-47d1-af52-50d0acb74bee", clientSecretEncrypted: encrypt("segredo") });
@@ -351,5 +353,26 @@ describe("autorização expirada", () => {
     const result = await syncConnection(connectionId);
 
     expect(result).toEqual({ ok: true, accounts: 0, bills: 0, transactions: 0 });
+  });
+});
+
+describe("syncAllConnections", () => {
+  it("sincroniza cada conexão, sem que a falha de uma impeça as outras, e ignora as revogadas", async () => {
+    const [semCredenciais] = await db()
+      .insert(integrationConnections)
+      .values({ memberId: karinaId, externalItemId: "item-da-karina", institutionName: "Nubank" })
+      .returning();
+    await db()
+      .insert(integrationConnections)
+      .values({ memberId: karinaId, externalItemId: "item-revogado", institutionName: "Inter", status: "revoked" });
+
+    const summary = await syncAllConnections();
+
+    expect(summary).toMatchObject({ total: 2, succeeded: 1, failed: 1 });
+    expect(summary.results).toEqual([
+      { connectionId, result: { ok: true, accounts: 2, bills: 2, transactions: 10 } },
+      { connectionId: semCredenciais.id, result: { ok: false, error: expect.any(String) } },
+    ]);
+    expect(await db().$count(syncRuns)).toBe(2);
   });
 });

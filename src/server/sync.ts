@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, lt, ne, notInArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   creditCardBills,
@@ -308,6 +308,33 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
       .where(eq(syncRuns.id, run.id));
     return { ok: false, error: message };
   }
+}
+
+export type SyncAllSummary = {
+  total: number;
+  succeeded: number;
+  failed: number;
+  results: { connectionId: string; result: SyncResult }[];
+};
+
+export async function syncAllConnections(): Promise<SyncAllSummary> {
+  const connections = await getDb()
+    .select({ id: integrationConnections.id })
+    .from(integrationConnections)
+    .where(ne(integrationConnections.status, "revoked"))
+    .orderBy(asc(integrationConnections.createdAt));
+
+  const results: SyncAllSummary["results"] = [];
+  for (const connection of connections) {
+    const result = await syncConnection(connection.id).catch((error: unknown): SyncResult => {
+      console.error("Falha inesperada ao sincronizar conexão", connection.id, error);
+      return { ok: false, error: "Falha inesperada ao sincronizar." };
+    });
+    results.push({ connectionId: connection.id, result });
+  }
+
+  const succeeded = results.filter(({ result }) => result.ok).length;
+  return { total: results.length, succeeded, failed: results.length - succeeded, results };
 }
 
 export async function latestSyncRuns(connectionIds: string[]) {
