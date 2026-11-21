@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Button } from "@/components/ui/button";
 import { getCurrentMember } from "@/server/auth";
-import { signOut } from "./login/actions";
+import { signOut } from "@/app/login/actions";
 
 const proximasEtapas = [
   "Sincronização de contas, cartões e faturas",
@@ -31,7 +31,7 @@ async function MemberGreeting() {
 
 export default function Home() {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8 px-6 py-12">
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8 px-6 py-12">
       <header className="flex items-center justify-between gap-4">
         <h1 className="text-3xl font-semibold tracking-tight">Kalu</h1>
         <form action={signOut}>
@@ -60,6 +60,6 @@ export default function Home() {
           ))}
         </ul>
       </section>
-    </main>
+    </div>
   );
 }

@@ -77,7 +77,7 @@ async function ConnectionsContent() {
 
 export default function ConnectionsPage() {
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-6 py-12">
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-6 py-12">
       <header className="flex flex-col gap-2">
         <Link href="/" className="text-sm text-muted-foreground">
           ← Início
@@ -88,6 +88,6 @@ export default function ConnectionsPage() {
       <Suspense fallback={<p className="text-sm text-muted-foreground">Carregando…</p>}>
         <ConnectionsContent />
       </Suspense>
-    </main>
+    </div>
   );
 }
