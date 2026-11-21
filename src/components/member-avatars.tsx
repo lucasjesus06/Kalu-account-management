@@ -14,13 +14,14 @@ export async function MemberAvatars() {
   const members = await listHouseholdMembers(member.householdId);
 
   return (
-    <ul className="flex -space-x-2" aria-label="Integrantes da residência">
-      {members.map(({ id, displayName }) => (
+    <ul className="flex -space-x-1.5" aria-label="Integrantes da residência">
+      {members.map(({ id, displayName }, index) => (
         <li
           key={id}
           title={displayName}
+          style={{ zIndex: members.length - index }}
           className={cn(
-            "flex size-8 items-center justify-center rounded-full text-xs font-bold ring-2 ring-background",
+            "relative flex size-8 items-center justify-center rounded-full text-xs font-bold ring-2 ring-background",
             id === member.memberId ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground",
           )}
         >
