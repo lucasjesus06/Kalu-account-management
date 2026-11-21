@@ -20,6 +20,7 @@ vi.mock("@/db/client", () => ({ getDb: () => state.db }));
 
 const { encrypt } = await import("./crypto");
 const { latestSyncRuns, syncConnection } = await import("./sync");
+const { listHouseholdAccounts } = await import("./accounts");
 
 type TestDb = Awaited<ReturnType<typeof createTestDatabase>>;
 const db = () => state.db as TestDb;
@@ -38,6 +39,7 @@ type Fixtures = {
 
 let fixtures: Fixtures;
 let connectionId: string;
+let householdId: string;
 
 function simulatePluggy() {
   vi.stubGlobal(
@@ -67,7 +69,8 @@ function simulatePluggy() {
 beforeEach(async () => {
   vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
   state.db = await createTestDatabase();
-  const { lucas } = await seedHousehold(db());
+  const { household, lucas } = await seedHousehold(db());
+  householdId = household.id;
   await db()
     .insert(pluggyCredentials)
     .values({ memberId: lucas.id, clientId: "593ce5a5-bd0f-47d1-af52-50d0acb74bee", clientSecretEncrypted: encrypt("segredo") });
@@ -221,5 +224,27 @@ describe("syncConnection", () => {
     const [connection] = await db().select().from(integrationConnections);
     expect(connection.status).toBe("active");
     expect((await latestSyncRuns([connectionId])).get(connectionId)?.status).toBe("succeeded");
+  });
+});
+
+describe("listHouseholdAccounts", () => {
+  it("lista as contas da residência com titular e totais importados", async () => {
+    await syncConnection(connectionId);
+
+    const accounts = await listHouseholdAccounts(householdId);
+
+    expect(
+      accounts.map((a) => ({ kind: a.kind, owner: a.ownerName, bank: a.institutionName, tx: a.transactionsCount, bills: a.billsCount })),
+    ).toEqual([
+      { kind: "checking", owner: "Lucas", bank: "Santander", tx: 2, bills: 0 },
+      { kind: "credit_card", owner: "Lucas", bank: "Santander", tx: 8, bills: 2 },
+    ]);
+  });
+
+  it("não mostra contas de outra residência", async () => {
+    await syncConnection(connectionId);
+    const { household: outra } = await seedHousehold(db());
+
+    expect(await listHouseholdAccounts(outra.id)).toEqual([]);
   });
 });
