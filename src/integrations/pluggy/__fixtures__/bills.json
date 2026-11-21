@@ -1,0 +1,25 @@
+{
+  "total": 2,
+  "totalPages": 1,
+  "page": 1,
+  "results": [
+    {
+      "id": "0c15574b-9488-4556-a388-d3891cd01bfd",
+      "dueDate": "2026-11-03T00:00:00.000Z",
+      "totalAmount": 4034.77,
+      "totalAmountCurrencyCode": "BRL",
+      "minimumPaymentAmount": 543.36,
+      "allowsInstallments": true,
+      "financeCharges": []
+    },
+    {
+      "id": "a5893707-d318-418b-86a2-b9f85c9005ca",
+      "dueDate": "2026-10-03T00:00:00.000Z",
+      "totalAmount": 6365.17,
+      "totalAmountCurrencyCode": "BRL",
+      "minimumPaymentAmount": 757.37,
+      "allowsInstallments": true,
+      "financeCharges": []
+    }
+  ]
+}

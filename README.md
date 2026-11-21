@@ -111,6 +111,7 @@ Os testes de integração rodam contra um PostgreSQL em memória ([PGlite](https
 | `DATABASE_MIGRATION_URL` | Conexão usada pelas migrations, pelo pooler do Supabase em modo sessão (porta 5432) |
 | `ENCRYPTION_KEY` | Chave de criptografia das credenciais da Pluggy |
 | `CRON_SECRET` | Protege os endpoints das tarefas agendadas |
+| `PLUGGY_API_URL` | Opcional. Endereço da API da Pluggy; vazio usa `https://api.pluggy.ai`. Serve para apontar para um servidor simulado em testes |
 
 As credenciais da Pluggy não ficam em variáveis de ambiente: cada integrante cadastra as suas, que são guardadas criptografadas no banco.
 

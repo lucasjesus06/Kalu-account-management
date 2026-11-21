@@ -1,0 +1,108 @@
+{
+  "results": [
+    {
+      "id": "c621701a-e6b6-4f32-a698-69c2d82f0196",
+      "accountId": "f9dd22a9-84dd-470d-8d0e-63a02537d5bc",
+      "date": "2026-11-17T18:13:56.000Z",
+      "description": "RECARGAPAY  *TESTE",
+      "currencyCode": "BRL",
+      "amount": 60.82,
+      "amountInAccountCurrency": null,
+      "type": "DEBIT",
+      "status": "POSTED",
+      "category": "Digital services",
+      "creditCardMetadata": { "installmentNumber": 1, "totalInstallments": 3, "billId": null }
+    },
+    {
+      "id": "aa11aa11-0000-4000-8000-000000000001",
+      "accountId": "f9dd22a9-84dd-470d-8d0e-63a02537d5bc",
+      "date": "2026-11-14T12:32:43.000Z",
+      "description": "UBER * PENDING",
+      "currencyCode": "BRL",
+      "amount": 6,
+      "type": "DEBIT",
+      "status": "PENDING",
+      "category": "Taxi and ride-hailing",
+      "creditCardMetadata": null
+    },
+    {
+      "id": "aa11aa11-0000-4000-8000-000000000002",
+      "accountId": "f9dd22a9-84dd-470d-8d0e-63a02537d5bc",
+      "date": "2026-11-07T03:00:00.000Z",
+      "description": "PAGAMENTO DE FATURA",
+      "currencyCode": "BRL",
+      "amount": -4034.77,
+      "type": "CREDIT",
+      "status": "POSTED",
+      "category": "Credit card payment",
+      "creditCardMetadata": null
+    },
+    {
+      "id": "aa11aa11-0000-4000-8000-000000000003",
+      "accountId": "f9dd22a9-84dd-470d-8d0e-63a02537d5bc",
+      "date": "2026-10-16T03:00:00.000Z",
+      "description": "PAGAMENTO DE FATURA",
+      "currencyCode": "BRL",
+      "amount": -6365.17,
+      "type": "CREDIT",
+      "status": "POSTED",
+      "category": "Credit card payment",
+      "creditCardMetadata": { "billId": "0c15574b-9488-4556-a388-d3891cd01bfd" }
+    },
+    {
+      "id": "6af5f200-2ac8-4a62-909d-18faadb7dd62",
+      "accountId": "f9dd22a9-84dd-470d-8d0e-63a02537d5bc",
+      "date": "2026-09-28T03:00:00.000Z",
+      "description": "ZP*LOJA TESTE",
+      "currencyCode": "BRL",
+      "amount": 1220.67,
+      "type": "DEBIT",
+      "status": "POSTED",
+      "category": "Shopping",
+      "creditCardMetadata": {
+        "installmentNumber": 2,
+        "totalInstallments": 2,
+        "totalAmount": null,
+        "billId": "0c15574b-9488-4556-a388-d3891cd01bfd"
+      }
+    },
+    {
+      "id": "aa11aa11-0000-4000-8000-000000000004",
+      "accountId": "f9dd22a9-84dd-470d-8d0e-63a02537d5bc",
+      "date": "2026-10-11T20:04:48.000Z",
+      "description": "DL          *UberRides",
+      "currencyCode": "BRL",
+      "amount": 28.09,
+      "type": "DEBIT",
+      "status": "POSTED",
+      "category": "Taxi and ride-hailing",
+      "creditCardMetadata": { "installmentNumber": 1, "totalInstallments": 1, "billId": "0c15574b-9488-4556-a388-d3891cd01bfd" }
+    },
+    {
+      "id": "aa11aa11-0000-4000-8000-000000000005",
+      "accountId": "f9dd22a9-84dd-470d-8d0e-63a02537d5bc",
+      "date": "2026-09-17T03:00:00.000Z",
+      "description": "IFD*COMPANHIA TESTE",
+      "currencyCode": "BRL",
+      "amount": -7.29,
+      "type": "CREDIT",
+      "status": "POSTED",
+      "category": "Food delivery",
+      "creditCardMetadata": { "billId": "a5893707-d318-418b-86a2-b9f85c9005ca" }
+    },
+    {
+      "id": "aa11aa11-0000-4000-8000-000000000006",
+      "accountId": "f9dd22a9-84dd-470d-8d0e-63a02537d5bc",
+      "date": "2026-09-20T10:00:00.000Z",
+      "description": "APPLE.COM/BILL",
+      "currencyCode": "USD",
+      "amount": 9.99,
+      "amountInAccountCurrency": 54.12,
+      "type": "DEBIT",
+      "status": "POSTED",
+      "category": null,
+      "creditCardMetadata": { "billId": "a5893707-d318-418b-86a2-b9f85c9005ca" }
+    }
+  ],
+  "next": null
+}

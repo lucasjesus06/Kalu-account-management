@@ -1,0 +1,52 @@
+{
+  "results": [
+    {
+      "id": "48f9caac-0ea6-477c-8962-5a3183c9ee29",
+      "type": "BANK",
+      "subtype": "CHECKING_ACCOUNT",
+      "name": "Banco Santander Pessoa Física",
+      "balance": 0,
+      "currencyCode": "BRL",
+      "itemId": "2eaac5ff-57cb-49bd-b51e-cd6f39ba56d3",
+      "number": "00009999999-1",
+      "createdAt": "2026-11-19T17:52:45.023Z",
+      "updatedAt": "2026-11-19T19:32:02.991Z",
+      "marketingName": null,
+      "taxNumber": "000.000.000-00",
+      "owner": "TITULAR DE TESTE",
+      "bankData": {
+        "transferNumber": "033/0000/00009999999-1",
+        "closingBalance": 0,
+        "automaticallyInvestedBalance": 0
+      },
+      "creditData": null
+    },
+    {
+      "id": "f9dd22a9-84dd-470d-8d0e-63a02537d5bc",
+      "type": "CREDIT",
+      "subtype": "CREDIT_CARD",
+      "name": "ELITE CASHBACK VISA SIGNATURE ",
+      "balance": 7992.75,
+      "currencyCode": "BRL",
+      "itemId": "2eaac5ff-57cb-49bd-b51e-cd6f39ba56d3",
+      "number": "1234",
+      "createdAt": "2026-11-19T17:52:45.705Z",
+      "updatedAt": "2026-11-19T19:32:03.008Z",
+      "marketingName": null,
+      "taxNumber": null,
+      "owner": "TITULAR DE TESTE",
+      "bankData": null,
+      "creditData": {
+        "level": "PLATINUM",
+        "brand": "VISA",
+        "balanceCloseDate": null,
+        "balanceDueDate": "2026-11-03",
+        "availableCreditLimit": 7.25,
+        "minimumPayment": 543.36,
+        "creditLimit": 8000,
+        "isLimitFlexible": false,
+        "status": "ACTIVE"
+      }
+    }
+  ]
+}
