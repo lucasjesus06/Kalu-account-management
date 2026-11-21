@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, notInArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   creditCardBills,
@@ -28,6 +28,7 @@ type Db = ReturnType<typeof getDb>;
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 const CHUNK_SIZE = 500;
+const STALE_RUN_MINUTES = 15;
 
 class SyncError extends Error {}
 
@@ -188,7 +189,21 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
     return { ok: false, error: "Conexão não encontrada." };
   }
 
-  const [run] = await db.insert(syncRuns).values({ connectionId }).returning({ id: syncRuns.id });
+  await db
+    .update(syncRuns)
+    .set({ status: "failed", error: "Sincronização interrompida antes de terminar.", finishedAt: new Date() })
+    .where(
+      and(
+        eq(syncRuns.connectionId, connectionId),
+        eq(syncRuns.status, "running"),
+        lt(syncRuns.startedAt, new Date(Date.now() - STALE_RUN_MINUTES * 60 * 1000)),
+      ),
+    );
+
+  const [run] = await db.insert(syncRuns).values({ connectionId }).onConflictDoNothing().returning({ id: syncRuns.id });
+  if (!run) {
+    return { ok: false, error: "Já existe uma sincronização em andamento para esta conexão." };
+  }
 
   try {
     const [credentials] = await db

@@ -248,3 +248,40 @@ describe("listHouseholdAccounts", () => {
     expect(await listHouseholdAccounts(outra.id)).toEqual([]);
   });
 });
+
+describe("trava de sincronização", () => {
+  it("não inicia outra sincronização enquanto uma está em andamento", async () => {
+    await db().insert(syncRuns).values({ connectionId });
+
+    const result = await syncConnection(connectionId);
+
+    expect(result).toEqual({ ok: false, error: "Já existe uma sincronização em andamento para esta conexão." });
+    expect(fetch).not.toHaveBeenCalled();
+    expect(await counts()).toEqual({ accounts: 0, bills: 0, transactions: 0 });
+  });
+
+  it("libera execução travada há mais de 15 minutos", async () => {
+    await db()
+      .insert(syncRuns)
+      .values({ connectionId, startedAt: new Date(Date.now() - 16 * 60 * 1000) });
+
+    const result = await syncConnection(connectionId);
+
+    expect(result.ok).toBe(true);
+    const runs = await db().select().from(syncRuns).orderBy(asc(syncRuns.startedAt));
+    expect(runs.map((r) => [r.status, r.error])).toEqual([
+      ["failed", "Sincronização interrompida antes de terminar."],
+      ["succeeded", null],
+    ]);
+  });
+
+  it("duas sincronizações ao mesmo tempo: só uma roda", async () => {
+    const results = await Promise.all([syncConnection(connectionId), syncConnection(connectionId)]);
+
+    expect(results.filter((r) => r.ok)).toHaveLength(1);
+    expect(results.filter((r) => !r.ok)).toEqual([
+      { ok: false, error: "Já existe uma sincronização em andamento para esta conexão." },
+    ]);
+    expect(await counts()).toEqual({ accounts: 2, bills: 2, transactions: 10 });
+  });
+});

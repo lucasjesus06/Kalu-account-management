@@ -1,4 +1,5 @@
 import { bigint, date, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { authUsers } from "drizzle-orm/supabase";
 
 export const households = pgTable("households", {
@@ -150,5 +151,10 @@ export const syncRuns = pgTable(
     startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
-  (table) => [index("sync_runs_connection_started_idx").on(table.connectionId, table.startedAt)],
+  (table) => [
+    index("sync_runs_connection_started_idx").on(table.connectionId, table.startedAt),
+    uniqueIndex("sync_runs_one_running_per_connection_idx")
+      .on(table.connectionId)
+      .where(sql`${table.status} = 'running'`),
+  ],
 ).enableRLS();
