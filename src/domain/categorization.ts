@@ -1,0 +1,118 @@
+import type { CategorySlug } from "./categories";
+import { normalizeDescription } from "./merchant";
+
+export type CategorizationMatch = { slug: CategorySlug; matchedBy: "merchant" | "provider" };
+
+const merchantRules: [RegExp, CategorySlug][] = [
+  [/\bUBER[ *]?EATS\b|\bIFOOD\b|^IFD\*|\bKEETA|\bRAPPI\b|\bAIQFOME\b|\bZE ?DELIVERY\b/, "restaurantes"],
+  [/\bUBER|\b99 ?(?:RIDE|APP|POP|TAXI)\b|\bCABIFY\b|\bINDRIVE\b/, "transporte-por-aplicativo"],
+  [/\bMC ?DONALDS?\b|\bBURGER ?KING\b|\bBK BRASIL\b|\bSUBWAY\b|\bHABIBS?\b|\bKFC\b|\bGIRAFFAS\b|\bBOBS\b|\bPOPEYES\b/, "fast-food"],
+  [
+    /\bNETFLIX\b|\bSPOTIFY\b|\bDISNEY|\bPRIME ?VIDEO\b|\bAMAZON ?PRIME\b|\bHBO ?MAX\b|\bGLOBOPLAY\b|\bYOUTUBE ?PREMIUM\b|\bDEEZER\b|\bPARAMOUNT|\bCRUNCHYROLL\b|\bAPPLE\.COM\/BILL\b|\bGOOGLE ?ONE\b|\bOPENAI\b|\bCHATGPT\b/,
+    "assinaturas",
+  ],
+  [/\bDROGASIL\b|\bDROGA ?RAIA\b|\bRAIA\b|\bPAGUE ?MENOS\b|\bPANVEL\b|\bDROGARIA|\bFARMACIA/, "farmacia"],
+  [/\bSMART ?FIT\b|\bBLUEFIT\b|\bBODYTECH\b|\bGYMPASS\b|\bWELLHUB\b|\bTOTALPASS\b/, "academia"],
+  [/\bMERCADO ?LIVRE\b|\bMERCADOLIVRE\b|\bAMAZON\b|\bSHOPEE\b|\bALIEXPRESS\b|\bSHEIN\b|\bMAGALU\b|\bMAGAZINE ?LUIZA\b/, "compras"],
+  [
+    /\bCARREFOUR\b|\bASSAI\b|\bATACADAO\b|\bPAO DE ACUCAR\b|\bSONDA\b|\bSUPERMERCADO|\bHIPERMERCADO|\bMERCADO\b|\bHORTIFRUTI\b|\bSAMS ?CLUB\b/,
+    "supermercado",
+  ],
+  [/\bPOSTO\b|\bSHELL\b|\bIPIRANGA\b|\bPETROBRAS\b|\bAUTO ?POSTO\b/, "combustivel"],
+  [/\bSEM ?PARAR\b|\bCONECTCAR\b|\bVELOE\b|\bESTAPAR\b|\bMETRO\b|\bCPTM\b|\bBILHETE UNICO\b/, "transporte"],
+  [/\bSABESP\b|\bCOPASA\b|\bCEDAE\b|\bSANEPAR\b|\bEMBASA\b|\bCOMPESA\b/, "agua"],
+  [/\bENEL\b|\bCPFL\b|\bCEMIG\b|\bNEOENERGIA\b|\bELETROPAULO\b|\bLIGHT S\.?A\b|\bCOPEL\b|\bEDP\b/, "energia"],
+  [/\bVIVO\b|\bCLARO\b|\bTIM\b|\bOI FIBRA\b|\bNET SERVICOS\b/, "internet-telefone"],
+  [/\bPETZ\b|\bCOBASI\b|\bPETLOVE\b/, "pets"],
+];
+
+const providerCategories: Record<string, CategorySlug> = {
+  "Food and drinks": "restaurantes",
+  "Eating out": "restaurantes",
+  "Food delivery": "restaurantes",
+  Groceries: "supermercado",
+  "Taxi and ride-hailing": "transporte-por-aplicativo",
+  Transportation: "transporte",
+  "Public transportation": "transporte",
+  "Car rental": "transporte",
+  Bicycle: "transporte",
+  Automotive: "transporte",
+  Parking: "transporte",
+  "Tolls and in-vehicle payment": "transporte",
+  "Vehicle ownership taxes and fees": "transporte",
+  "Vehicle maintenance": "transporte",
+  "Traffic tickets": "transporte",
+  "Gas stations": "combustivel",
+  Healthcare: "saude",
+  Dentist: "saude",
+  Optometry: "saude",
+  "Hospital clinics and labs": "saude",
+  "Health insurance": "saude",
+  Pharmacy: "farmacia",
+  "Wellness and fitness": "academia",
+  "Gyms and fitness centers": "academia",
+  "Sports practice": "academia",
+  Wellness: "academia",
+  Education: "educacao",
+  "Online Courses": "educacao",
+  University: "educacao",
+  School: "educacao",
+  Kindergarten: "educacao",
+  Leisure: "entretenimento",
+  Tickets: "entretenimento",
+  "Stadiums and arenas": "entretenimento",
+  "Landmarks and museums": "entretenimento",
+  "Cinema, theater and concerts": "entretenimento",
+  Gaming: "entretenimento",
+  Clothing: "vestuario",
+  "Digital services": "assinaturas",
+  "Video streaming": "assinaturas",
+  "Music streaming": "assinaturas",
+  Shopping: "compras",
+  "Online shopping": "compras",
+  Electronics: "compras",
+  "Kids and toys": "compras",
+  Bookstore: "compras",
+  "Sports goods": "compras",
+  "Office Supplies": "compras",
+  "Pet supplies and vet": "pets",
+  Travel: "viagens",
+  "Airport and airlines": "viagens",
+  Accommodation: "viagens",
+  "Bus tickets": "viagens",
+  "Mileage programs": "viagens",
+  Insurance: "seguros",
+  "Life insurance": "seguros",
+  "Home Insurance": "seguros",
+  "Vehicle insurance": "seguros",
+  Taxes: "impostos",
+  "Income taxes": "impostos",
+  "Tax on financial operations": "impostos",
+  "Urban land and building tax": "impostos",
+  "Bank fees": "tarifas-bancarias",
+  "Account fees": "tarifas-bancarias",
+  "Wire transfer fees and ATM fees": "tarifas-bancarias",
+  "Credit card fees": "tarifas-bancarias",
+  Housing: "moradia",
+  Rent: "moradia",
+  Houseware: "moradia",
+  Utilities: "moradia",
+  Gas: "moradia",
+  Electricity: "energia",
+  Water: "agua",
+  Telecommunications: "internet-telefone",
+  Internet: "internet-telefone",
+  Mobile: "internet-telefone",
+  TV: "internet-telefone",
+  Services: "servicos",
+};
+
+export function categorize(transaction: { description: string; providerCategory: string | null }): CategorizationMatch | null {
+  const description = normalizeDescription(transaction.description);
+  const rule = merchantRules.find(([pattern]) => pattern.test(description));
+  if (rule) {
+    return { slug: rule[1], matchedBy: "merchant" };
+  }
+  const providerSlug = transaction.providerCategory ? providerCategories[transaction.providerCategory] : undefined;
+  return providerSlug ? { slug: providerSlug, matchedBy: "provider" } : null;
+}
