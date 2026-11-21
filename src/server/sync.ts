@@ -12,6 +12,7 @@ import {
 import type { ImportedAccount, ImportedBill, ImportedTransaction } from "@/domain/imported";
 import {
   authenticate,
+  getItem,
   listAccounts,
   listBills,
   listTransactions,
@@ -31,6 +32,12 @@ const CHUNK_SIZE = 500;
 const STALE_RUN_MINUTES = 15;
 
 class SyncError extends Error {}
+
+class AuthorizationExpiredError extends Error {}
+
+class EmptySourceError extends Error {}
+
+const EXPIRED_ERROR_CODES = new Set(["USER_AUTHORIZATION_EXPIRED", "USER_AUTHORIZATION_REVOKED"]);
 
 function chunk<T>(items: T[]) {
   const chunks: T[][] = [];
@@ -164,6 +171,12 @@ function describeError(error: unknown) {
   if (error instanceof SyncError) {
     return error.message;
   }
+  if (error instanceof AuthorizationExpiredError) {
+    return "A autorização desta conexão expirou. Renove a conexão no Meu Pluggy para voltar a sincronizar.";
+  }
+  if (error instanceof EmptySourceError) {
+    return "A Pluggy não retornou nenhuma conta desta conexão, o que costuma indicar autorização expirada. Nenhum dado foi alterado.";
+  }
   if (error instanceof PluggyAuthError) {
     return "A Pluggy recusou as credenciais desta conexão. Cadastre-as novamente.";
   }
@@ -180,6 +193,7 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
       id: integrationConnections.id,
       memberId: integrationConnections.memberId,
       externalItemId: integrationConnections.externalItemId,
+      authorizationExpiresAt: integrationConnections.authorizationExpiresAt,
     })
     .from(integrationConnections)
     .where(eq(integrationConnections.id, connectionId))
@@ -219,7 +233,26 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
       clientId: credentials.clientId,
       clientSecret: decrypt(credentials.clientSecretEncrypted),
     });
+    const item = await getItem(apiKey, connection.externalItemId);
+    const authorizationExpiresAt = item.consentExpiresAt ?? connection.authorizationExpiresAt;
+    if (item.consentExpiresAt) {
+      await db
+        .update(integrationConnections)
+        .set({ authorizationExpiresAt: item.consentExpiresAt })
+        .where(eq(integrationConnections.id, connection.id));
+    }
+    if (
+      (item.errorCode && EXPIRED_ERROR_CODES.has(item.errorCode)) ||
+      item.status === "LOGIN_ERROR" ||
+      (authorizationExpiresAt && authorizationExpiresAt.getTime() <= Date.now())
+    ) {
+      throw new AuthorizationExpiredError();
+    }
+
     const accounts = await listAccounts(apiKey, connection.externalItemId);
+    if (accounts.length === 0 && (await db.$count(financialAccounts, eq(financialAccounts.connectionId, connection.id))) > 0) {
+      throw new EmptySourceError();
+    }
 
     let billsCount = 0;
     let transactionsCount = 0;
@@ -256,7 +289,12 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
     return { ok: true, accounts: accounts.length, bills: billsCount, transactions: transactionsCount };
   } catch (error) {
     const message = describeError(error);
-    if (error instanceof PluggyAuthError || error instanceof PluggyNotFoundError) {
+    if (error instanceof AuthorizationExpiredError) {
+      await db
+        .update(integrationConnections)
+        .set({ status: "expired" })
+        .where(eq(integrationConnections.id, connection.id));
+    } else if (error instanceof PluggyAuthError || error instanceof PluggyNotFoundError || error instanceof EmptySourceError) {
       await db
         .update(integrationConnections)
         .set({ status: "error" })

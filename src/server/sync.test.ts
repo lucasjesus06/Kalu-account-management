@@ -31,6 +31,8 @@ const NOVEMBER_BILL = "0c15574b-9488-4556-a388-d3891cd01bfd";
 const PENDING_ID = "aa11aa11-0000-4000-8000-000000000001";
 
 type Fixtures = {
+  item: Record<string, unknown>;
+  accounts: typeof accountsFixture.results;
   cardTransactions: typeof cardTransactionsFixture.results;
   bills: typeof billsFixture.results;
   authStatus: number;
@@ -50,8 +52,11 @@ function simulatePluggy() {
       if (url.pathname === "/auth") {
         return fixtures.authStatus === 200 ? json(200, { apiKey: "chave" }) : json(fixtures.authStatus);
       }
+      if (url.pathname === `/items/${ITEM_ID}`) {
+        return json(200, fixtures.item);
+      }
       if (url.pathname === "/accounts") {
-        return fixtures.accountsStatus === 200 ? json(200, accountsFixture) : json(fixtures.accountsStatus);
+        return fixtures.accountsStatus === 200 ? json(200, { results: fixtures.accounts }) : json(fixtures.accountsStatus);
       }
       if (url.pathname === "/bills") {
         return json(200, { totalPages: 1, results: fixtures.bills });
@@ -80,6 +85,8 @@ beforeEach(async () => {
     .returning();
   connectionId = connection.id;
   fixtures = {
+    item: { id: ITEM_ID, status: "UPDATED", connector: { name: "Santander" } },
+    accounts: structuredClone(accountsFixture.results),
     cardTransactions: structuredClone(cardTransactionsFixture.results),
     bills: structuredClone(billsFixture.results),
     authStatus: 200,
@@ -283,5 +290,66 @@ describe("trava de sincronização", () => {
       { ok: false, error: "Já existe uma sincronização em andamento para esta conexão." },
     ]);
     expect(await counts()).toEqual({ accounts: 2, bills: 2, transactions: 10 });
+  });
+});
+
+describe("autorização expirada", () => {
+  const expiredMessage = "A autorização desta conexão expirou. Renove a conexão no Meu Pluggy para voltar a sincronizar.";
+
+  async function connectionStatus() {
+    const [connection] = await db().select().from(integrationConnections);
+    return connection;
+  }
+
+  it.each([
+    ["código de erro da Pluggy", { error: { code: "USER_AUTHORIZATION_EXPIRED" } }],
+    ["item com erro de login", { status: "LOGIN_ERROR" }],
+  ])("detecta pelo %s e não altera os dados", async (_motivo, item) => {
+    await syncConnection(connectionId);
+    fixtures.item = { ...fixtures.item, ...item };
+
+    const result = await syncConnection(connectionId);
+
+    expect(result).toEqual({ ok: false, error: expiredMessage });
+    expect((await connectionStatus()).status).toBe("expired");
+    expect(await counts()).toEqual({ accounts: 2, bills: 2, transactions: 10 });
+  });
+
+  it("detecta pela data de validade vencida", async () => {
+    await db().update(integrationConnections).set({ authorizationExpiresAt: new Date(Date.now() - 1000) });
+
+    const result = await syncConnection(connectionId);
+
+    expect(result).toEqual({ ok: false, error: expiredMessage });
+    expect((await connectionStatus()).status).toBe("expired");
+  });
+
+  it("atualiza a validade quando a Pluggy informa uma nova data", async () => {
+    await db().update(integrationConnections).set({ authorizationExpiresAt: new Date(Date.now() - 1000) });
+    fixtures.item = { ...fixtures.item, consentExpiresAt: "2099-01-01T00:00:00.000Z" };
+
+    const result = await syncConnection(connectionId);
+
+    expect(result.ok).toBe(true);
+    expect((await connectionStatus()).authorizationExpiresAt).toEqual(new Date("2099-01-01T00:00:00.000Z"));
+  });
+
+  it("trata retorno sem contas, de uma conexão que já tinha contas, como falha", async () => {
+    await syncConnection(connectionId);
+    fixtures.accounts = [];
+
+    const result = await syncConnection(connectionId);
+
+    expect(result).toEqual({ ok: false, error: expect.stringContaining("não retornou nenhuma conta") });
+    expect((await connectionStatus()).status).toBe("error");
+    expect(await counts()).toEqual({ accounts: 2, bills: 2, transactions: 10 });
+  });
+
+  it("aceita conexão nova ainda sem contas", async () => {
+    fixtures.accounts = [];
+
+    const result = await syncConnection(connectionId);
+
+    expect(result).toEqual({ ok: true, accounts: 0, bills: 0, transactions: 0 });
   });
 });
