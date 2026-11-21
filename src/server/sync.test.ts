@@ -21,6 +21,7 @@ vi.mock("@/db/client", () => ({ getDb: () => state.db }));
 const { encrypt } = await import("./crypto");
 const { latestSyncRuns, syncAllConnections, syncConnection } = await import("./sync");
 const { listHouseholdAccounts } = await import("./accounts");
+const { listHouseholdCardBills } = await import("./bills");
 
 type TestDb = Awaited<ReturnType<typeof createTestDatabase>>;
 const db = () => state.db as TestDb;
@@ -425,5 +426,30 @@ describe("syncAllConnections", () => {
       { connectionId: semCredenciais.id, result: { ok: false, error: expect.any(String) } },
     ]);
     expect(await db().$count(syncRuns)).toBe(2);
+  });
+});
+
+describe("listHouseholdCardBills", () => {
+  it("compõe as faturas dos cartões da residência com os dados sincronizados", async () => {
+    await syncConnection(connectionId);
+    const [card] = await db().select().from(financialAccounts).where(eq(financialAccounts.externalId, CARD_ID));
+
+    const bills = await listHouseholdCardBills(householdId);
+
+    expect([...bills.keys()]).toEqual([card.id]);
+    const { open, closed } = bills.get(card.id)!;
+    expect(open).toMatchObject({ purchasesCents: 6682, pendingCents: 600, billPaymentsCents: 403477, netCents: 6682 });
+    expect(closed.map((bill) => [bill.dueDate, bill.officialTotalCents, bill.netCents, bill.unidentifiedCents, bill.incomplete])).toEqual([
+      ["2026-11-03", 403477, 124876, 403477 - 124876, false],
+      ["2026-10-03", 636517, 5412 - 729, 636517 - 4683, true],
+    ]);
+    expect(closed[0].billPaymentsCents).toBe(636517);
+  });
+
+  it("não traz cartões de outra residência", async () => {
+    await syncConnection(connectionId);
+    const outra = await seedHousehold(db());
+
+    expect((await listHouseholdCardBills(outra.household.id)).size).toBe(0);
   });
 });

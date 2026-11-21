@@ -35,3 +35,8 @@ export function formatTransactionChanges(changes: { created: number; updated: nu
     });
   return parts.length === 0 ? "nenhuma transação nova ou alterada" : listFormat.format(parts);
 }
+
+export function formatIsoDate(isoDate: string) {
+  const [year, month, day] = isoDate.split("-");
+  return `${day}/${month}/${year}`;
+}
