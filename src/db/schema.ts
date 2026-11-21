@@ -111,6 +111,8 @@ export const categories = pgTable("categories", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
 
+export const categorySources = ["automatic", "rule", "user"] as const;
+
 export const transactionDirections = ["outflow", "inflow"] as const;
 export const transactionStatuses = ["posted", "pending"] as const;
 
@@ -133,6 +135,9 @@ export const transactions = pgTable(
     installmentNumber: integer("installment_number"),
     installmentTotal: integer("installment_total"),
     providerCategory: text("provider_category"),
+    merchantName: text("merchant_name"),
+    categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
+    categorySource: text("category_source", { enum: categorySources }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -140,6 +145,7 @@ export const transactions = pgTable(
     uniqueIndex("transactions_account_external_idx").on(table.accountId, table.externalId),
     index("transactions_account_occurred_idx").on(table.accountId, table.occurredAt),
     index("transactions_bill_idx").on(table.billId),
+    index("transactions_category_idx").on(table.categoryId),
   ],
 ).enableRLS();
 
