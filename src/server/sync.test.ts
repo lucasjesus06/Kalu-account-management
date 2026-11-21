@@ -290,10 +290,18 @@ describe("listHouseholdAccounts", () => {
     const accounts = await listHouseholdAccounts(householdId);
 
     expect(
-      accounts.map((a) => ({ kind: a.kind, owner: a.ownerName, bank: a.institutionName, tx: a.transactionsCount, bills: a.billsCount })),
+      accounts.map((a) => ({
+        kind: a.kind,
+        owner: a.ownerName,
+        bank: a.institutionName,
+        tx: a.transactionsCount,
+        bills: a.billsCount,
+        spending: a.spendingCount,
+        categorized: a.categorizedSpendingCount,
+      })),
     ).toEqual([
-      { kind: "checking", owner: "Lucas", bank: "Santander", tx: 2, bills: 0 },
-      { kind: "credit_card", owner: "Lucas", bank: "Santander", tx: 8, bills: 2 },
+      { kind: "checking", owner: "Lucas", bank: "Santander", tx: 2, bills: 0, spending: 1, categorized: 0 },
+      { kind: "credit_card", owner: "Lucas", bank: "Santander", tx: 8, bills: 2, spending: 5, categorized: 5 },
     ]);
   });
 

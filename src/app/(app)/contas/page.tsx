@@ -160,6 +160,9 @@ async function AccountsContent() {
               <p className="border-t pt-4 text-xs text-muted-foreground">
                 {plural(account.transactionsCount, "transação", "transações")}
                 {isCard && ` · ${plural(account.billsCount, "fatura", "faturas")}`}
+                {isCard &&
+                  account.spendingCount > 0 &&
+                  ` · ${Math.round((account.categorizedSpendingCount / account.spendingCount) * 100)}% das compras com categoria`}
                 {account.lastSyncedAt && ` · sincronizado em ${formatDateTime(account.lastSyncedAt)}`}
               </p>
             </li>
