@@ -99,6 +99,7 @@ A `ENCRYPTION_KEY` não pode ser trocada sem cadastrar as credenciais de novo: o
 A sincronização busca contas, faturas e transações na Pluggy e grava no banco:
 
 - Pode rodar quantas vezes for preciso: cada registro é identificado pelo identificador da fonte, então nada é duplicado e alterações da fonte (como uma transação pendente que foi lançada) atualizam o registro existente.
+- Antes de gravar, o serviço compara o que veio da fonte com o que já está salvo e grava somente os registros novos ou alterados. Cada execução registra quantas transações foram novas, alteradas e removidas, e esse resumo aparece em Conexões.
 - Transações pendentes que a fonte deixou de enviar são removidas; transações já lançadas nunca são apagadas.
 - Cada compra de cartão fica vinculada à sua fatura pelo identificador da fatura na fonte, nunca por data.
 - Valores são guardados em centavos inteiros.

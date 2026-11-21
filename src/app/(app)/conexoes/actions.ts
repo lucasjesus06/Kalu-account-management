@@ -1,6 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { formatTransactionChanges } from "@/lib/format";
 import { getCurrentMember } from "@/server/auth";
 import { addConnection, listConnections, saveCredentials, type ActionResult } from "@/server/connections";
 import { syncConnection } from "@/server/sync";
@@ -42,10 +43,6 @@ export async function addConnectionAction(_prevState: FormState, formData: FormD
   return result;
 }
 
-function plural(total: number, singular: string, pluralForm: string) {
-  return `${total} ${total === 1 ? singular : pluralForm}`;
-}
-
 export async function syncConnectionAction(_prevState: FormState, formData: FormData): Promise<FormState> {
   const member = await getCurrentMember();
   if (!member) {
@@ -64,8 +61,5 @@ export async function syncConnectionAction(_prevState: FormState, formData: Form
   if (!result.ok) {
     return result;
   }
-  return {
-    ok: true,
-    message: `Sincronizado: ${plural(result.accounts, "conta", "contas")}, ${plural(result.bills, "fatura", "faturas")} e ${plural(result.transactions, "transação", "transações")}.`,
-  };
+  return { ok: true, message: `Sincronizado: ${formatTransactionChanges(result.changes)}.` };
 }

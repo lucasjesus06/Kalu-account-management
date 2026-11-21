@@ -43,6 +43,13 @@
       "when": 1795298933552,
       "tag": "0005_validade_autorizacao",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795301350726,
+      "tag": "0006_contagem_de_mudancas",
+      "breakpoints": true
     }
   ]
 }
