@@ -39,3 +39,11 @@ export async function getCurrentMember(): Promise<CurrentMember | null> {
 
   return member ?? null;
 }
+
+export async function listHouseholdMembers(householdId: string) {
+  return getDb()
+    .select({ id: householdMembers.id, displayName: householdMembers.displayName })
+    .from(householdMembers)
+    .where(eq(householdMembers.householdId, householdId))
+    .orderBy(householdMembers.createdAt);
+}
