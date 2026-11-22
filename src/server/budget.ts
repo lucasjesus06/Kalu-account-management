@@ -1,6 +1,6 @@
 import "server-only";
 import { and, desc, eq, gte, isNull, lte, or } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { asService, getDb } from "@/db/client";
 import { budgetAlerts, budgetGoals, categories, householdMembers } from "@/db/schema";
 import {
   goalLabel,
@@ -79,7 +79,7 @@ export async function evaluateBudgetAlerts(householdId: string, now: Date) {
   return created.length;
 }
 
-export async function evaluateAndNotify(householdId: string, now: Date) {
+async function evaluateAndNotifyImpl(householdId: string, now: Date) {
   const created = await evaluateBudgetAlerts(householdId, now);
   await dispatchBudgetPushes(householdId, now).catch((error) => console.error("Falha ao enviar os avisos", error));
   return created;
@@ -271,4 +271,8 @@ export async function removeGoal(member: Member, goalId: string, now: Date): Pro
     await recordChange(tx, removed);
   });
   return { ok: true, message: "Meta encerrada. Ela continua aparecendo nos meses em que valeu." };
+}
+
+export function evaluateAndNotify(...args: Parameters<typeof evaluateAndNotifyImpl>) {
+  return asService(() => evaluateAndNotifyImpl(...args));
 }

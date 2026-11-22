@@ -23,7 +23,7 @@ import cardTransactionsFixture from "@/integrations/pluggy/__fixtures__/card-tra
 import { createTestDatabase, seedHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown }));
-vi.mock("@/db/client", () => ({ getDb: () => state.db }));
+vi.mock("@/db/client", () => ({ getDb: () => state.db, getServiceDb: () => state.db, asService: <T>(work: () => Promise<T>) => work() }));
 
 const { encrypt } = await import("./crypto");
 const { latestSyncRuns, syncAllConnections, syncConnection } = await import("./sync");

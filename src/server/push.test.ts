@@ -3,7 +3,7 @@ import { budgetAlerts, categories, financialAccounts, integrationConnections, tr
 import { createTestDatabase, seedHousehold, shareWithMemberHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown, send: undefined as unknown as ReturnType<typeof import("vitest").vi.fn> }));
-vi.mock("@/db/client", () => ({ getDb: () => state.db }));
+vi.mock("@/db/client", () => ({ getDb: () => state.db, getServiceDb: () => state.db, asService: <T>(work: () => Promise<T>) => work() }));
 vi.mock("web-push", () => {
   state.send = vi.fn();
   return { sendNotification: state.send };

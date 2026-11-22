@@ -4,7 +4,7 @@ import { integrationConnections, pluggyCredentials, webhookEvents } from "@/db/s
 import { createTestDatabase, seedHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown, sync: vi.fn() }));
-vi.mock("@/db/client", () => ({ getDb: () => state.db }));
+vi.mock("@/db/client", () => ({ getDb: () => state.db, getServiceDb: () => state.db, asService: <T>(work: () => Promise<T>) => work() }));
 vi.mock("./sync", () => ({
   SYNC_ALREADY_RUNNING: "Já existe uma sincronização em andamento para esta conexão.",
   syncConnection: state.sync,
