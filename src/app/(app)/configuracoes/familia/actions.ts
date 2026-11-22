@@ -11,7 +11,7 @@ import {
   transferAdmin,
   type HouseholdResult,
 } from "@/server/households";
-import type { FormState } from "../conexoes/actions";
+import type { FormState } from "../../conexoes/actions";
 
 export type InviteState = { ok: true; token: string } | { ok: false; error: string } | null;
 

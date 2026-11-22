@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { Copy, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { FormState } from "../conexoes/actions";
-import { FormFeedback } from "../conexoes/form-feedback";
+import { useCloseAddDialog } from "@/components/add-dialog";
+import type { FormState } from "../../conexoes/actions";
+import { FormFeedback } from "../../conexoes/form-feedback";
 import {
   createHouseholdAction,
   createInviteAction,
@@ -19,17 +20,29 @@ import {
 
 export function CreateHouseholdForm() {
   const [state, formAction, pending] = useActionState<FormState, FormData>(createHouseholdAction, null);
+  const close = useCloseAddDialog();
+
+  useEffect(() => {
+    if (state?.ok) {
+      close();
+    }
+  }, [state, close]);
 
   return (
-    <form action={formAction} className="flex flex-col gap-3">
-      <Label htmlFor="household-name">Nome da residência</Label>
-      <div className="flex items-center gap-2">
+    <form action={formAction} className="flex flex-col gap-4">
+      <p className="text-sm text-muted-foreground">
+        Uma residência reúne as contas que as pessoas decidirem compartilhar, sem tirar nada do espaço de cada uma.
+      </p>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="household-name">Nome da residência</Label>
         <Input id="household-name" name="name" maxLength={60} required placeholder="Ex.: Casa da praia" />
-        <Button type="submit" disabled={pending}>
-          {pending ? "Criando…" : "Criar"}
-        </Button>
       </div>
       <FormFeedback state={state} />
+      <div className="flex justify-end">
+        <Button type="submit" disabled={pending}>
+          {pending ? "Criando…" : "Criar residência"}
+        </Button>
+      </div>
     </form>
   );
 }
@@ -112,12 +125,12 @@ function ConfirmButton({
   const [confirming, setConfirming] = useState(false);
 
   return (
-    <form action={formAction} className="flex flex-col items-end gap-2">
+    <form action={formAction} className="flex flex-col items-start gap-2">
       {Object.entries(fields).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
       {confirming ? (
-        <div key="confirmar" className="flex flex-wrap items-center justify-end gap-2">
+        <div key="confirmar" className="flex flex-wrap items-center gap-2">
           <Button type="submit" variant="destructive" size="sm" disabled={pending}>
             {pending ? pendingLabel : confirmLabel}
           </Button>

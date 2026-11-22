@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { LogOut, Users } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { BottomNav, TopNav } from "@/components/app-nav";
 import { HideValuesToggle } from "@/components/hide-values-toggle";
 import { MemberAvatars } from "@/components/member-avatars";
@@ -26,8 +26,8 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
               <MemberAvatars />
             </Suspense>
             <Button asChild variant="ghost" size="icon">
-              <Link href="/residencias" aria-label="Residências" title="Residências">
-                <Users />
+              <Link href="/configuracoes" aria-label="Configurações" title="Configurações">
+                <Settings />
               </Link>
             </Button>
             <form action={signOut}>
