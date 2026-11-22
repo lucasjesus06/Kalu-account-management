@@ -13,10 +13,12 @@ import { isMonth, monthOf } from "@/domain/periods";
 import { formatDateTime, formatMonth } from "@/lib/format";
 import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
 import { getBudgetOverview, listAlerts } from "@/server/budget";
+import { countMemberSubscriptions, vapidPublicKey } from "@/server/push";
 import { listCategories } from "@/server/categorization";
 import { availableMonths } from "@/server/consumption";
 import { GoalForm, RemoveGoalButton } from "./goal-form";
 import { GoalProgressItem } from "./goal-progress";
+import { PushToggle } from "./push-toggle";
 
 export const metadata: Metadata = {
   title: "Metas · Kalu",
@@ -38,12 +40,13 @@ async function GoalsContent({ searchParams }: Pick<PageProps<"/metas">, "searchP
   const { mes } = await searchParams;
   const currentMonth = monthOf(new Date());
   const month = typeof mes === "string" && isMonth(mes) && mes <= currentMonth ? mes : currentMonth;
-  const [overview, alerts, categories, members, months] = await Promise.all([
+  const [overview, alerts, categories, members, months, subscribedDevices] = await Promise.all([
     getBudgetOverview(member.householdId, month),
     listAlerts(member.householdId),
     listCategories(),
     listHouseholdMembers(member.householdId),
     availableMonths(member.householdId),
+    countMemberSubscriptions(member.memberId),
   ]);
   const isCurrent = month === currentMonth;
   const monthOptions = [currentMonth, ...months.filter((m) => m < currentMonth)];
@@ -135,6 +138,9 @@ async function GoalsContent({ searchParams }: Pick<PageProps<"/metas">, "searchP
       )}
 
       <Panel title="Avisos" icon={BellRing}>
+        <div className="mb-5">
+          <PushToggle publicKey={vapidPublicKey()} subscribedDevices={subscribedDevices} />
+        </div>
         {alerts.length === 0 ? (
           <p className="text-muted-foreground">Nenhum aviso ainda.</p>
         ) : (
