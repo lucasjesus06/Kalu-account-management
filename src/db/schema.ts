@@ -2,6 +2,7 @@ import { bigint, check, date, index, integer, pgTable, text, timestamp, uniqueIn
 import { sql } from "drizzle-orm";
 import { authUsers } from "drizzle-orm/supabase";
 import { changeKinds, changeScopes } from "../domain/change-log";
+import { householdRoles } from "../domain/household";
 import { expenseNatureSources, expenseNatures } from "../domain/expense-nature";
 
 export const households = pgTable("households", {
@@ -14,9 +15,7 @@ export const householdMembers = pgTable(
   "household_members",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    householdId: uuid("household_id")
-      .notNull()
-      .references(() => households.id, { onDelete: "restrict" }),
+    householdId: uuid("household_id").references(() => households.id, { onDelete: "restrict" }),
     displayName: text("display_name").notNull(),
     userId: uuid("user_id")
       .unique()
@@ -24,6 +23,28 @@ export const householdMembers = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index("household_members_household_id_idx").on(table.householdId)],
+).enableRLS();
+
+export const householdMemberships = pgTable(
+  "household_memberships",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => householdMembers.id, { onDelete: "cascade" }),
+    role: text("role", { enum: householdRoles }).notNull().default("member"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("household_memberships_household_member_idx").on(table.householdId, table.memberId),
+    uniqueIndex("household_memberships_one_admin_idx")
+      .on(table.householdId)
+      .where(sql`${table.role} = 'admin'`),
+    index("household_memberships_member_idx").on(table.memberId),
+  ],
 ).enableRLS();
 
 export const pluggyCredentials = pgTable("pluggy_credentials", {

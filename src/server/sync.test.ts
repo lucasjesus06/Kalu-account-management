@@ -7,6 +7,8 @@ import {
   creditCardBills,
   expenseNatureRules,
   financialAccounts,
+  householdMembers,
+  householdMemberships,
   integrationConnections,
   pluggyCredentials,
   syncRuns,
@@ -282,6 +284,22 @@ describe("syncConnection", () => {
     const [connection] = await db().select().from(integrationConnections);
     expect(connection.status).toBe("active");
     expect((await latestSyncRuns([connectionId])).get(connectionId)?.status).toBe("succeeded");
+  });
+});
+
+describe("perfil sem residência", () => {
+  it("sincroniza normalmente e as contas continuam sendo do dono", async () => {
+    await db().delete(householdMemberships);
+    await db().update(householdMembers).set({ householdId: null });
+
+    const result = await syncConnection(connectionId);
+
+    expect(result).toMatchObject({ ok: true, accounts: 2, transactions: 10 });
+    const owners = await db()
+      .select({ memberId: integrationConnections.memberId })
+      .from(financialAccounts)
+      .innerJoin(integrationConnections, eq(integrationConnections.id, financialAccounts.connectionId));
+    expect(new Set(owners.map((o) => o.memberId)).size).toBe(1);
   });
 });
 
