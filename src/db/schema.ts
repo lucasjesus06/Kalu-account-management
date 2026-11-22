@@ -1,6 +1,7 @@
-import { bigint, date, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { bigint, check, date, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { authUsers } from "drizzle-orm/supabase";
+import { expenseNatureSources, expenseNatures } from "../domain/expense-nature";
 
 export const households = pgTable("households", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -132,6 +133,29 @@ export const categoryRules = pgTable(
   (table) => [uniqueIndex("category_rules_household_merchant_idx").on(table.householdId, table.merchantName)],
 ).enableRLS();
 
+export const expenseNatureRules = pgTable(
+  "expense_nature_rules",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    merchantName: text("merchant_name").notNull(),
+    expenseNature: text("expense_nature", { enum: expenseNatures }).notNull(),
+    expenseMemberId: uuid("expense_member_id").references(() => householdMembers.id, { onDelete: "cascade" }),
+    createdByMemberId: uuid("created_by_member_id").references(() => householdMembers.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("expense_nature_rules_household_merchant_idx").on(table.householdId, table.merchantName),
+    check(
+      "expense_nature_rules_member_check",
+      sql`case when ${table.expenseNature} = 'individual' then ${table.expenseMemberId} is not null else ${table.expenseMemberId} is null end`,
+    ),
+  ],
+).enableRLS();
+
 export const categorySources = ["automatic", "rule", "user"] as const;
 
 export const transactionDirections = ["outflow", "inflow"] as const;
@@ -159,6 +183,9 @@ export const transactions = pgTable(
     merchantName: text("merchant_name"),
     categoryId: uuid("category_id").references(() => categories.id, { onDelete: "set null" }),
     categorySource: text("category_source", { enum: categorySources }),
+    expenseNature: text("expense_nature", { enum: expenseNatures }),
+    expenseMemberId: uuid("expense_member_id").references(() => householdMembers.id, { onDelete: "restrict" }),
+    expenseNatureSource: text("expense_nature_source", { enum: expenseNatureSources }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
@@ -167,6 +194,10 @@ export const transactions = pgTable(
     index("transactions_account_occurred_idx").on(table.accountId, table.occurredAt),
     index("transactions_bill_idx").on(table.billId),
     index("transactions_category_idx").on(table.categoryId),
+    check(
+      "transactions_expense_member_check",
+      sql`case when ${table.expenseNature} = 'individual' then ${table.expenseMemberId} is not null else ${table.expenseMemberId} is null end`,
+    ),
   ],
 ).enableRLS();
 

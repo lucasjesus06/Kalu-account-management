@@ -5,6 +5,7 @@ import {
   categories,
   categoryRules,
   creditCardBills,
+  expenseNatureRules,
   financialAccounts,
   integrationConnections,
   pluggyCredentials,
@@ -597,5 +598,76 @@ describe("regras de categoria da residência na sincronização", () => {
     await syncConnection(connectionId);
 
     expect(await categoryOf(PENDING_ID)).toEqual({ category: "saude", source: "rule" });
+  });
+});
+
+describe("para quem na sincronização", () => {
+  const RESTAURANT_ID = "aa11aa11-0000-4000-8000-000000000005";
+
+  async function natureOf(externalId: string) {
+    const [row] = await db()
+      .select({
+        nature: transactions.expenseNature,
+        memberId: transactions.expenseMemberId,
+        source: transactions.expenseNatureSource,
+      })
+      .from(transactions)
+      .where(eq(transactions.externalId, externalId));
+    return row;
+  }
+
+  async function addNatureRule(merchantName: string) {
+    await db()
+      .insert(expenseNatureRules)
+      .values({ householdId, merchantName, expenseNature: "individual", expenseMemberId: karinaId });
+  }
+
+  it("marca como avaliado sem inventar para quem quando a categoria não é da residência", async () => {
+    await syncConnection(connectionId);
+
+    expect(await natureOf(RESTAURANT_ID)).toEqual({ nature: null, memberId: null, source: "automatic" });
+  });
+
+  it("marca como Casa o que cai numa categoria da residência", async () => {
+    const [mercado] = await db().select().from(categories).where(eq(categories.slug, "supermercado"));
+    await db().insert(categoryRules).values({ householdId, merchantName: "COMPANHIA TESTE", categoryId: mercado.id });
+
+    await syncConnection(connectionId);
+
+    expect(await natureOf(RESTAURANT_ID)).toEqual({ nature: "household", memberId: null, source: "automatic" });
+  });
+
+  it("aplica a regra de para quem da residência nas transações novas", async () => {
+    await addNatureRule("UBER");
+
+    await syncConnection(connectionId);
+
+    expect(await natureOf(PENDING_ID)).toEqual({ nature: "individual", memberId: karinaId, source: "rule" });
+  });
+
+  it("regra criada depois não altera o que já foi avaliado", async () => {
+    await syncConnection(connectionId);
+    await addNatureRule("UBER");
+
+    await syncConnection(connectionId);
+
+    expect(await natureOf(PENDING_ID)).toEqual({ nature: null, memberId: null, source: "automatic" });
+  });
+
+  it("reavalia quando a descrição muda na fonte, mas nunca sobrescreve a escolha do usuário", async () => {
+    await addNatureRule("DROGASIL 123");
+    await syncConnection(connectionId);
+    await db()
+      .update(transactions)
+      .set({ expenseNature: "shared", expenseNatureSource: "user" })
+      .where(eq(transactions.externalId, RESTAURANT_ID));
+    fixtures.cardTransactions = fixtures.cardTransactions.map((t) =>
+      t.id === PENDING_ID || t.id === RESTAURANT_ID ? { ...t, description: "DROGASIL 123" } : t,
+    );
+
+    await syncConnection(connectionId);
+
+    expect(await natureOf(PENDING_ID)).toEqual({ nature: "individual", memberId: karinaId, source: "rule" });
+    expect(await natureOf(RESTAURANT_ID)).toEqual({ nature: "shared", memberId: null, source: "user" });
   });
 });

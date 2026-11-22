@@ -1,4 +1,5 @@
 import { consumptionCents, consumptionNature, type ConsumptionRecord } from "./consumption";
+import type { ExpenseNature } from "./expense-nature";
 import type { Cents } from "./money";
 import { dateOf, monthOf } from "./periods";
 
@@ -21,6 +22,11 @@ const accountKindLabels: Record<string, string> = {
 
 const categoryKindLabels = { expense: "consumo", transfer: "transferencia" } as const;
 const categorySourceLabels = { automatic: "automatica", rule: "regra", user: "usuario" } as const;
+const expenseNatureLabels: Record<ExpenseNature, string> = {
+  household: "domestica",
+  shared: "compartilhada",
+  individual: "individual",
+};
 
 export const exportColumns = [
   "id",
@@ -38,10 +44,13 @@ export const exportColumns = [
   "tipo_categoria",
   "origem_categoria",
   "categoria_fonte",
+  "para_quem",
+  "participantes",
+  "origem_para_quem",
   "conta",
   "tipo_conta",
   "instituicao",
-  "integrante",
+  "titular",
   "fatura_vencimento",
   "parcela",
   "total_parcelas",
@@ -59,7 +68,19 @@ function escape(value: string, separator: string) {
   return needsQuotes ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
-export function toCsv(records: readonly ConsumptionRecord[], billTotals: readonly Cents[], format: ExportFormat) {
+function participants(record: ConsumptionRecord, memberNames: readonly string[]) {
+  if (record.expenseNature === "individual") {
+    return record.expenseMemberName ?? "";
+  }
+  return record.expenseNature ? memberNames.join("|") : "";
+}
+
+export function toCsv(
+  records: readonly ConsumptionRecord[],
+  billTotals: readonly Cents[],
+  format: ExportFormat,
+  memberNames: readonly string[],
+) {
   const separator = format === "excel" ? ";" : ",";
   const rows = records.map((record) => {
     const nature = consumptionNature(record, billTotals);
@@ -79,6 +100,9 @@ export function toCsv(records: readonly ConsumptionRecord[], billTotals: readonl
       record.category ? categoryKindLabels[record.category.kind] : "",
       record.categorySource ? categorySourceLabels[record.categorySource] : "",
       record.providerCategory ?? "",
+      record.expenseNature ? expenseNatureLabels[record.expenseNature] : "",
+      participants(record, memberNames),
+      record.expenseNatureSource ? categorySourceLabels[record.expenseNatureSource] : "",
       record.accountName,
       accountKindLabels[record.accountKind] ?? record.accountKind,
       record.institutionName ?? "",

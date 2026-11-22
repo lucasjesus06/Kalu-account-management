@@ -1,5 +1,6 @@
 import { Money } from "@/components/money";
 import type { BillLine } from "@/domain/bill-details";
+import { expenseChoiceOf, expenseNatureLabel } from "@/domain/expense-nature";
 import { fromCents } from "@/domain/money";
 import { formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -37,11 +38,14 @@ export function TransactionRow({
             ` · parcela ${line.installmentNumber}/${line.installmentTotal}`}
           {line.status === "pending" && " · pendente"}
           {(line.categorySource === "rule" || line.categorySource === "user") && ` · ${sourceLabels[line.categorySource]}`}
+          {line.expenseNature &&
+            ` · ${expenseNatureLabel({ nature: line.expenseNature, memberId: line.expenseMemberId, memberName: line.expenseMemberName })}`}
           {" · "}
           <CorrectCategoryButton
             transactionId={line.id}
             merchant={line.merchantName ?? line.description}
             categorySlug={line.category?.slug ?? null}
+            expenseChoice={expenseChoiceOf({ nature: line.expenseNature, memberId: line.expenseMemberId })}
           />
         </span>
       </div>

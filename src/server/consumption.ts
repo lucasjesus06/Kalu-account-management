@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import { compareBreakdowns, summarize, type ConsumptionRecord } from "@/domain/consumption";
 import { comparablePeriods, isMonth, monthOf, shiftMonth, type Period } from "@/domain/periods";
+import { expenseMembers, expenseSelection, joinExpenseMember } from "./expense-nature";
 
 function householdAccounts(householdId: string) {
   return getDb()
@@ -41,6 +42,7 @@ export async function loadConsumptionRecords(householdId: string, range?: Period
         categorySlug: categories.slug,
         categoryName: categories.name,
         categoryKind: categories.kind,
+        ...expenseSelection,
         accountId: financialAccounts.id,
         accountKind: financialAccounts.kind,
         accountName: financialAccounts.name,
@@ -53,6 +55,7 @@ export async function loadConsumptionRecords(householdId: string, range?: Period
       .innerJoin(integrationConnections, eq(integrationConnections.id, financialAccounts.connectionId))
       .innerJoin(householdMembers, eq(householdMembers.id, integrationConnections.memberId))
       .leftJoin(categories, eq(categories.id, transactions.categoryId))
+      .leftJoin(expenseMembers, joinExpenseMember)
       .leftJoin(creditCardBills, eq(creditCardBills.id, transactions.billId))
       .where(
         and(
@@ -144,6 +147,7 @@ export async function getConsumptionComparison(
     current,
     previous,
     byCategory: compareBreakdowns(current.byCategory, previous.byCategory),
+    byExpenseNature: compareBreakdowns(current.byExpenseNature, previous.byExpenseNature),
     byMember: compareBreakdowns(current.byMember, previous.byMember),
     byOrigin: compareBreakdowns(current.byOrigin, previous.byOrigin),
     byMerchant: compareBreakdowns(current.byMerchant, previous.byMerchant),

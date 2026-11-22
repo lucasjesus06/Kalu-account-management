@@ -4,6 +4,7 @@ import { getDb } from "@/db/client";
 import { categories, financialAccounts, householdMembers, integrationConnections, transactions } from "@/db/schema";
 import { summarizeStatement, type StatementLine } from "@/domain/statement";
 import { UUID_PATTERN } from "./connections";
+import { expenseMembers, expenseSelection, joinExpenseMember } from "./expense-nature";
 
 const TIME_ZONE = "America/Sao_Paulo";
 const MONTH_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])$/;
@@ -63,9 +64,11 @@ export async function getAccountStatement(householdId: string, accountId: string
           categorySlug: categories.slug,
           categoryName: categories.name,
           categoryKind: categories.kind,
+          ...expenseSelection,
         })
         .from(transactions)
         .leftJoin(categories, eq(categories.id, transactions.categoryId))
+        .leftJoin(expenseMembers, joinExpenseMember)
         .where(and(eq(transactions.accountId, accountId), eq(monthOf, selectedMonth)))
         .orderBy(desc(transactions.occurredAt))
     : [];

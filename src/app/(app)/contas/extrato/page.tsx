@@ -11,7 +11,7 @@ import { fromCents } from "@/domain/money";
 import { statementNature } from "@/domain/statement";
 import { formatMonth } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { getCurrentMember } from "@/server/auth";
+import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
 import { listCategories } from "@/server/categorization";
 import { getAccountStatement } from "@/server/statement";
 import { CategoryCorrectionProvider } from "../category-correction";
@@ -28,9 +28,10 @@ async function StatementContent({ searchParams }: Pick<PageProps<"/contas/extrat
   }
 
   const { conta, mes } = await searchParams;
-  const [statement, categories] = await Promise.all([
+  const [statement, categories, members] = await Promise.all([
     getAccountStatement(member.householdId, typeof conta === "string" ? conta : "", typeof mes === "string" ? mes : undefined),
     listCategories(),
+    listHouseholdMembers(member.householdId),
   ]);
   if (!statement) {
     notFound();
@@ -98,7 +99,7 @@ async function StatementContent({ searchParams }: Pick<PageProps<"/contas/extrat
         cartão já são contadas na fatura. Datas pelo horário de Brasília.
       </p>
 
-      <CategoryCorrectionProvider categories={categories}>
+      <CategoryCorrectionProvider categories={categories} members={members}>
         <Panel title="Movimentações" icon={List}>
           {lines.length === 0 ? (
             <p className="text-muted-foreground">Nenhuma movimentação importada nesta conta.</p>

@@ -1,5 +1,6 @@
 import { BILL_PAYMENT_TOLERANCE_CENTS, classifyCardTransaction, type CardTransaction } from "./bills";
 import type { CategoryKind } from "./categories";
+import type { ExpenseNature, ExpenseNatureSource } from "./expense-nature";
 import type { Cents } from "./money";
 
 export type BillLine = CardTransaction & {
@@ -8,6 +9,10 @@ export type BillLine = CardTransaction & {
   merchantName: string | null;
   category: { slug: string; name: string; kind: CategoryKind } | null;
   categorySource: "automatic" | "rule" | "user" | null;
+  expenseNature: ExpenseNature | null;
+  expenseMemberId: string | null;
+  expenseMemberName: string | null;
+  expenseNatureSource: ExpenseNatureSource | null;
   installmentNumber: number | null;
   installmentTotal: number | null;
 };
