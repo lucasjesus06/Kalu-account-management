@@ -71,6 +71,13 @@
       "when": 1795304983863,
       "tag": "0009_categoria_das_transacoes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795312823972,
+      "tag": "0010_regras_de_categoria",
+      "breakpoints": true
     }
   ]
 }
