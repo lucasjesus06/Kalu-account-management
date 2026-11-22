@@ -5,6 +5,7 @@ import {
   categories,
   categoryRules,
   creditCardBills,
+  expenseNatureRules,
   financialAccounts,
   householdMembers,
   integrationConnections,
@@ -26,6 +27,7 @@ import {
   PluggyNotFoundError,
 } from "@/integrations/pluggy/client";
 import { decrypt } from "./crypto";
+import { refreshExpenseNature } from "./expense-nature";
 
 export type SyncResult =
   | { ok: true; accounts: number; bills: number; transactions: number; changes: TransactionChanges }
@@ -219,6 +221,7 @@ async function saveTransactions(
           installmentTotal: excluded("installment_total"),
           providerCategory: excluded("provider_category"),
           categorySource: sql`case when ${transactions.categorySource} in ('automatic', 'rule') and (${transactions.description} is distinct from excluded.description or ${transactions.providerCategory} is distinct from excluded.provider_category) then null else ${transactions.categorySource} end`,
+          expenseNatureSource: sql`case when ${transactions.expenseNatureSource} = 'automatic' and (${transactions.description} is distinct from excluded.description or ${transactions.providerCategory} is distinct from excluded.provider_category) then null when ${transactions.expenseNatureSource} = 'rule' and ${transactions.description} is distinct from excluded.description then null else ${transactions.expenseNatureSource} end`,
           updatedAt: new Date(),
         },
       });
@@ -353,14 +356,24 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
     let billsCount = 0;
     let transactionsCount = 0;
     const changes: TransactionChanges = { created: 0, updated: 0, removed: 0 };
-    const [categoryRows, ruleRows] = await Promise.all([
+    const [categoryRows, ruleRows, natureRuleRows] = await Promise.all([
       db.select({ id: categories.id, slug: categories.slug }).from(categories),
       db
         .select({ merchantName: categoryRules.merchantName, categoryId: categoryRules.categoryId })
         .from(categoryRules)
         .innerJoin(householdMembers, eq(householdMembers.householdId, categoryRules.householdId))
         .where(eq(householdMembers.id, connection.memberId)),
+      db
+        .select({
+          merchantName: expenseNatureRules.merchantName,
+          nature: expenseNatureRules.expenseNature,
+          memberId: expenseNatureRules.expenseMemberId,
+        })
+        .from(expenseNatureRules)
+        .innerJoin(householdMembers, eq(householdMembers.householdId, expenseNatureRules.householdId))
+        .where(eq(householdMembers.id, connection.memberId)),
     ]);
+    const natureRules = new Map(natureRuleRows.map(({ merchantName, ...assignment }) => [merchantName, assignment]));
     const categorizer: Categorizer = {
       categoryIds: new Map(categoryRows.map((row) => [row.slug, row.id])),
       rules: new Map(ruleRows.map((row) => [row.merchantName, row.categoryId])),
@@ -374,6 +387,11 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
         const billIds = await saveBills(tx, accountId, bills);
         const saved = await saveTransactions(tx, accountId, imported, billIds);
         await categorizeTransactions(tx, accountId, categorizer);
+        await refreshExpenseNature(
+          tx,
+          and(eq(transactions.accountId, accountId), isNull(transactions.expenseNatureSource))!,
+          natureRules,
+        );
         return saved;
       });
       changes.created += accountChanges.created;

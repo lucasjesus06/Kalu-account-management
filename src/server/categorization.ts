@@ -1,15 +1,9 @@
 import "server-only";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import {
-  categories,
-  categoryRules,
-  financialAccounts,
-  householdMembers,
-  integrationConnections,
-  transactions,
-} from "@/db/schema";
+import { categories, categoryRules, transactions } from "@/db/schema";
 import { UUID_PATTERN, type ActionResult } from "./connections";
+import { householdAccountIds, refreshHouseholdExpenseNature } from "./expense-nature";
 
 export const correctionScopes = ["transaction", "merchant", "merchant_history"] as const;
 export type CorrectionScope = (typeof correctionScopes)[number];
@@ -19,15 +13,6 @@ export async function listCategories() {
     .select({ id: categories.id, slug: categories.slug, name: categories.name, kind: categories.kind })
     .from(categories)
     .orderBy(asc(categories.sortOrder));
-}
-
-function householdAccountIds(householdId: string) {
-  return getDb()
-    .select({ id: financialAccounts.id })
-    .from(financialAccounts)
-    .innerJoin(integrationConnections, eq(integrationConnections.id, financialAccounts.connectionId))
-    .innerJoin(householdMembers, eq(householdMembers.id, integrationConnections.memberId))
-    .where(eq(householdMembers.householdId, householdId));
 }
 
 export async function correctCategory(
@@ -71,6 +56,7 @@ export async function correctCategory(
       .update(transactions)
       .set({ categoryId, categorySource: "user", updatedAt: new Date() })
       .where(eq(transactions.id, transaction.id));
+    await refreshHouseholdExpenseNature(db, member.householdId, eq(transactions.id, transaction.id));
     return { ok: true, message: `Categoria alterada para ${categoryLabel} somente nesta transação.` };
   }
 
@@ -110,6 +96,11 @@ export async function correctCategory(
       .returning({ id: transactions.id });
     return updated.length;
   });
+  await refreshHouseholdExpenseNature(
+    db,
+    member.householdId,
+    scope === "merchant_history" ? eq(transactions.merchantName, merchant) : eq(transactions.id, transaction.id),
+  );
 
   if (scope === "merchant") {
     return {
