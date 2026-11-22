@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { categories, categoryRules, transactions } from "@/db/schema";
 import { UUID_PATTERN, type ActionResult } from "./connections";
+import { recordChange } from "./change-log";
 import { householdAccountIds, refreshHouseholdExpenseNature } from "./expense-nature";
 
 export const correctionScopes = ["transaction", "merchant", "merchant_history"] as const;
@@ -30,8 +31,14 @@ export async function correctCategory(
 
   const db = getDb();
   const [transaction] = await db
-    .select({ id: transactions.id, merchantName: transactions.merchantName, description: transactions.description })
+    .select({
+      id: transactions.id,
+      merchantName: transactions.merchantName,
+      description: transactions.description,
+      categoryName: categories.name,
+    })
     .from(transactions)
+    .leftJoin(categories, eq(categories.id, transactions.categoryId))
     .where(and(eq(transactions.id, transactionId), inArray(transactions.accountId, householdAccountIds(member.householdId))));
   if (!transaction) {
     return { ok: false, error: "Transação não encontrada." };
@@ -50,12 +57,27 @@ export async function correctCategory(
 
   const merchant = transaction.merchantName ?? transaction.description;
   const categoryLabel = category?.name ?? "Sem categoria";
+  const previousLabel = transaction.categoryName ?? "Sem categoria";
+  const logChange = (executor: Parameters<typeof recordChange>[0], affectedCount: number) =>
+    recordChange(executor, {
+      householdId: member.householdId,
+      memberId: member.memberId,
+      kind: "category_changed",
+      subject: merchant,
+      scope,
+      previousValue: previousLabel,
+      newValue: categoryLabel,
+      affectedCount,
+    });
 
   if (scope === "transaction") {
-    await db
-      .update(transactions)
-      .set({ categoryId, categorySource: "user", updatedAt: new Date() })
-      .where(eq(transactions.id, transaction.id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(transactions)
+        .set({ categoryId, categorySource: "user", updatedAt: new Date() })
+        .where(eq(transactions.id, transaction.id));
+      await logChange(tx, 1);
+    });
     await refreshHouseholdExpenseNature(db, member.householdId, eq(transactions.id, transaction.id));
     return { ok: true, message: `Categoria alterada para ${categoryLabel} somente nesta transação.` };
   }
@@ -80,6 +102,7 @@ export async function correctCategory(
       .where(eq(transactions.id, transaction.id));
 
     if (scope !== "merchant_history") {
+      await logChange(tx, 1);
       return 0;
     }
     const updated = await tx
@@ -94,6 +117,7 @@ export async function correctCategory(
         ),
       )
       .returning({ id: transactions.id });
+    await logChange(tx, updated.length + 1);
     return updated.length;
   });
   await refreshHouseholdExpenseNature(
