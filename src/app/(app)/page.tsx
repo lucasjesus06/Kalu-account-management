@@ -16,6 +16,7 @@ import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
 import { listHouseholdCardBills } from "@/server/bills";
 import { listConnections } from "@/server/connections";
 import { getConsumptionComparison } from "@/server/consumption";
+import { InstallApp } from "./install-app";
 
 const namesFormat = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
 const TOP_CATEGORIES = 5;
@@ -184,6 +185,8 @@ async function HomeContent() {
           </Link>
         </Button>
       </Panel>
+
+      <InstallApp />
     </>
   );
 }
