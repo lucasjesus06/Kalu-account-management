@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { ArrowDownLeft, ArrowRight, CreditCard, Landmark, PieChart, Plug, Users } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, CreditCard, Landmark, PieChart, Plug, Target, Users } from "lucide-react";
 import { AuthorizationNotice } from "@/components/authorization-notice";
 import { Change } from "@/components/change";
 import { Money } from "@/components/money";
@@ -11,12 +11,15 @@ import { Button } from "@/components/ui/button";
 import { authorizationAlert } from "@/domain/authorization";
 import { UNDEFINED_NATURE_KEY } from "@/domain/expense-nature";
 import { fromCents } from "@/domain/money";
+import { monthOf } from "@/domain/periods";
 import { formatDateTime, formatMonth, formatPeriod } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
 import { listHouseholdCardBills } from "@/server/bills";
 import { listConnections } from "@/server/connections";
+import { getBudgetOverview } from "@/server/budget";
 import { getConsumptionComparison } from "@/server/consumption";
+import { GoalProgressItem } from "./metas/goal-progress";
 import { InstallApp } from "./install-app";
 
 const namesFormat = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
@@ -34,11 +37,12 @@ async function HomeContent() {
   }
 
   const now = new Date();
-  const [members, connections, comparison, cardBills] = await Promise.all([
+  const [members, connections, comparison, cardBills, goals] = await Promise.all([
     listHouseholdMembers(member.householdId),
     listConnections(member.memberId),
     getConsumptionComparison(member.householdId, undefined, undefined, now),
     listHouseholdCardBills(member.householdId),
+    getBudgetOverview(member.householdId, monthOf(now)),
   ]);
 
   const alerts = connections.flatMap((connection) => {
@@ -199,6 +203,28 @@ async function HomeContent() {
               </p>
             </Panel>
           )}
+
+          <Panel title="Metas do mês" icon={Target}>
+            {goals.length === 0 ? (
+              <p className="text-muted-foreground">
+                Defina um limite por mês para uma categoria ou para todo o consumo, e o Kalu avisa quando chegar perto.
+              </p>
+            ) : (
+              <ul className="flex flex-col divide-y">
+                {[...goals]
+                  .sort((a, b) => b.progress.percent - a.progress.percent)
+                  .map(({ goal, label, progress }) => (
+                    <GoalProgressItem key={goal.id} goal={goal} label={label} progress={progress} />
+                  ))}
+              </ul>
+            )}
+            <Button asChild variant="outline" className="mt-5">
+              <Link href="/metas">
+                {goals.length === 0 ? "Criar meta" : "Gerenciar metas"}
+                <ArrowRight />
+              </Link>
+            </Button>
+          </Panel>
         </>
       ) : (
         <Panel title="Seus gastos" icon={PieChart}>

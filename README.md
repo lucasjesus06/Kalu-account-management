@@ -221,6 +221,16 @@ Cada transação guarda `expense_nature`, `expense_member_id` (só para `individ
 
 A correção usa o mesmo botão **Alterar** da categoria, com as mesmas três opções de alcance. Assim como na categoria, a sincronização avalia só as transações novas, reavalia quando a descrição muda na fonte e nunca altera a escolha do usuário. Quando a categoria muda, um "para quem" automático é recalculado; um vindo de regra ou do usuário é mantido.
 
+## Metas e alertas
+
+Uma meta é um limite mensal de consumo, por categoria e por para quem (ou para todo o consumo de um integrante). Fica em `/metas`, com atalho no painel "Metas do mês" da tela inicial.
+
+- O consumo comparado com o limite segue a mesma regra dos indicadores: compras menos estornos, pela data de Brasília, sem receitas, transferências e pagamentos de fatura.
+- Os avisos são configuráveis (padrão 70%, 90% e 100%, até 5 faixas de no máximo 300%). Cada faixa avisa uma vez por meta e por mês (`budget_alerts`, índice único em meta, mês e faixa), então reavaliar não repete o aviso.
+- A avaliação roda ao final de cada sincronização e quando uma transação é reclassificada.
+- Metas são versionadas por mês: editar num mês seguinte encerra a meta antiga no mês anterior e cria uma nova, preservando o histórico dos meses passados. Editar ou remover no mês de criação altera ou apaga a própria meta.
+- Só pode existir uma meta ativa por categoria e para quem.
+
 ## Indicadores e análise
 
 ### Definições

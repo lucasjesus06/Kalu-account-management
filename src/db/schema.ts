@@ -251,3 +251,55 @@ export const webhookEvents = pgTable(
     index("webhook_events_connection_idx").on(table.connectionId, table.receivedAt),
   ],
 ).enableRLS();
+
+export const budgetGoals = pgTable(
+  "budget_goals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id").references(() => categories.id, { onDelete: "restrict" }),
+    expenseNature: text("expense_nature", { enum: expenseNatures }),
+    expenseMemberId: uuid("expense_member_id").references(() => householdMembers.id, { onDelete: "restrict" }),
+    limitCents: cents("limit_cents").notNull(),
+    alertThresholds: integer("alert_thresholds")
+      .array()
+      .notNull()
+      .default(sql`'{70,90,100}'`),
+    startsMonth: text("starts_month").notNull(),
+    endsMonth: text("ends_month"),
+    createdByMemberId: uuid("created_by_member_id").references(() => householdMembers.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("budget_goals_household_idx").on(table.householdId),
+    check("budget_goals_limit_check", sql`${table.limitCents} > 0`),
+    check(
+      "budget_goals_months_check",
+      sql`${table.startsMonth} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' and (${table.endsMonth} is null or (${table.endsMonth} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$' and ${table.endsMonth} >= ${table.startsMonth}))`,
+    ),
+    check(
+      "budget_goals_member_check",
+      sql`case when ${table.expenseNature} = 'individual' then ${table.expenseMemberId} is not null else ${table.expenseMemberId} is null end`,
+    ),
+  ],
+).enableRLS();
+
+export const budgetAlerts = pgTable(
+  "budget_alerts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    goalId: uuid("goal_id")
+      .notNull()
+      .references(() => budgetGoals.id, { onDelete: "cascade" }),
+    month: text("month").notNull(),
+    threshold: integer("threshold").notNull(),
+    consumedCents: cents("consumed_cents").notNull(),
+    limitCents: cents("limit_cents").notNull(),
+    triggeredAt: timestamp("triggered_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("budget_alerts_goal_month_threshold_idx").on(table.goalId, table.month, table.threshold)],
+).enableRLS();
+
