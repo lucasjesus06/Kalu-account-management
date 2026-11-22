@@ -37,7 +37,7 @@ export type ClosedBillComposition = BillComposition & {
 
 const BILL_PAYMENT_CATEGORY = "Credit card payment";
 const BILL_PAYMENT_DESCRIPTION = /\b(PAGAMENTO|PAGTO|PGTO)\b/;
-const BILL_PAYMENT_TOLERANCE_CENTS = 10;
+export const BILL_PAYMENT_TOLERANCE_CENTS = 10;
 
 export function classifyCardTransaction(transaction: CardTransaction, billTotals: readonly Cents[]): CardTransactionNature {
   if (transaction.direction === "outflow") {

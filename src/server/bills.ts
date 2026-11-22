@@ -1,7 +1,23 @@
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { creditCardBills, financialAccounts, householdMembers, integrationConnections, transactions } from "@/db/schema";
+import {
+  categories,
+  creditCardBills,
+  financialAccounts,
+  householdMembers,
+  integrationConnections,
+  transactions,
+} from "@/db/schema";
+import {
+  creditLines,
+  futureInstallments,
+  groupByCategory,
+  paymentStatus,
+  topMerchants,
+  type BillLine,
+} from "@/domain/bill-details";
+import { UUID_PATTERN } from "./connections";
 import {
   composeClosedBills,
   composeOpenBill,
@@ -73,4 +89,106 @@ export async function listHouseholdCardBills(householdId: string) {
     });
   }
   return result;
+}
+
+export const OPEN_CYCLE = "aberta";
+
+export async function getCardBillDetail(householdId: string, accountId: string, cycleKey: string | undefined) {
+  if (!UUID_PATTERN.test(accountId)) {
+    return null;
+  }
+  const db = getDb();
+  const [account] = await db
+    .select({
+      id: financialAccounts.id,
+      name: financialAccounts.name,
+      numberLast4: financialAccounts.numberLast4,
+      institutionName: integrationConnections.institutionName,
+      ownerName: householdMembers.displayName,
+    })
+    .from(financialAccounts)
+    .innerJoin(integrationConnections, eq(integrationConnections.id, financialAccounts.connectionId))
+    .innerJoin(householdMembers, eq(householdMembers.id, integrationConnections.memberId))
+    .where(
+      and(
+        eq(financialAccounts.id, accountId),
+        eq(financialAccounts.kind, "credit_card"),
+        eq(householdMembers.householdId, householdId),
+      ),
+    );
+  if (!account) {
+    return null;
+  }
+
+  const [bills, rows] = await Promise.all([
+    db
+      .select({
+        externalId: creditCardBills.externalId,
+        dueDate: creditCardBills.dueDate,
+        totalCents: creditCardBills.totalCents,
+      })
+      .from(creditCardBills)
+      .where(eq(creditCardBills.accountId, accountId)),
+    db
+      .select({
+        id: transactions.id,
+        occurredAt: transactions.occurredAt,
+        amountCents: transactions.amountCents,
+        direction: transactions.direction,
+        status: transactions.status,
+        description: transactions.description,
+        providerCategory: transactions.providerCategory,
+        billExternalId: transactions.billExternalId,
+        merchantName: transactions.merchantName,
+        installmentNumber: transactions.installmentNumber,
+        installmentTotal: transactions.installmentTotal,
+        categorySlug: categories.slug,
+        categoryName: categories.name,
+      })
+      .from(transactions)
+      .leftJoin(categories, eq(categories.id, transactions.categoryId))
+      .where(eq(transactions.accountId, accountId)),
+  ]);
+
+  const lines: BillLine[] = rows.map(({ categorySlug, categoryName, ...row }) => ({
+    ...row,
+    category: categorySlug && categoryName ? { slug: categorySlug, name: categoryName } : null,
+  }));
+  const billTotals = bills.map((bill) => bill.totalCents);
+  const open = composeOpenBill(lines, bills);
+  const closed = composeClosedBills(lines, bills);
+
+  const closedIndex = closed.findIndex((bill) => bill.externalId === cycleKey);
+  const selectedLines =
+    closedIndex === -1
+      ? lines.filter((line) => line.billExternalId === null)
+      : lines.filter((line) => line.billExternalId === closed[closedIndex].externalId);
+
+  let selected;
+  if (closedIndex === -1) {
+    selected = { key: OPEN_CYCLE, isOpen: true as const, composition: open };
+  } else {
+    const bill = closed[closedIndex];
+    const paidCents = closedIndex === 0 ? open.billPaymentsCents : closed[closedIndex - 1].billPaymentsCents;
+    selected = {
+      key: bill.externalId,
+      isOpen: false as const,
+      composition: bill,
+      paidCents,
+      status: paymentStatus(bill.officialTotalCents, paidCents),
+    };
+  }
+
+  return {
+    account,
+    cycles: [
+      { key: OPEN_CYCLE, dueDate: null },
+      ...closed.map((bill) => ({ key: bill.externalId, dueDate: bill.dueDate })),
+    ],
+    selected,
+    categories: groupByCategory(selectedLines, billTotals),
+    merchants: topMerchants(selectedLines, billTotals),
+    credits: creditLines(selectedLines, billTotals),
+    installments: futureInstallments(selectedLines, billTotals),
+  };
 }
