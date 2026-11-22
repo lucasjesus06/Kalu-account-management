@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { toCsv } from "@/domain/export";
 import { fullMonth, isMonth } from "@/domain/periods";
-import { getCurrentMember } from "@/server/auth";
+import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
 import { loadConsumptionRecords } from "@/server/consumption";
 
 export async function GET(request: NextRequest) {
@@ -12,8 +12,16 @@ export async function GET(request: NextRequest) {
 
   const month = request.nextUrl.searchParams.get("mes") ?? undefined;
   const format = request.nextUrl.searchParams.get("formato") === "excel" ? "excel" : "csv";
-  const { records, billTotals } = await loadConsumptionRecords(member.householdId, isMonth(month) ? fullMonth(month) : undefined);
-  const csv = toCsv([...records].reverse(), billTotals, format);
+  const [{ records, billTotals }, members] = await Promise.all([
+    loadConsumptionRecords(member.householdId, isMonth(month) ? fullMonth(month) : undefined),
+    listHouseholdMembers(member.householdId),
+  ]);
+  const csv = toCsv(
+    [...records].reverse(),
+    billTotals,
+    format,
+    members.map((m) => m.displayName),
+  );
   const name = `kalu-transacoes-${isMonth(month) ? month : "historico"}${format === "excel" ? "-excel" : ""}.csv`;
 
   return new Response(csv, {

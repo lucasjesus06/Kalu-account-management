@@ -27,6 +27,10 @@ function record(amountCents: number, overrides: Partial<ConsumptionRecord> = {})
     merchantName: "LOJA",
     category: null,
     categorySource: null,
+    expenseNature: null,
+    expenseMemberId: null,
+    expenseMemberName: null,
+    expenseNatureSource: null,
     installmentNumber: null,
     installmentTotal: null,
     accountId: "cartao-lucas",
@@ -105,6 +109,33 @@ describe("resumo do período", () => {
     ]);
     expect(summary.byOrigin.map((o) => o.label)).toEqual(["Cartão · Santander · Lucas", "Conta · Nubank · Karina"]);
     expect(summary.byMerchant[0]).toEqual({ key: "CARREFOUR", label: "CARREFOUR", totalCents: 30000, count: 1 });
+  });
+
+  it("separa para quem foi o consumo de quem pagou, com estorno abatendo no mesmo grupo e o que falta definir", () => {
+    const casa = { expenseNature: "household" as const };
+    const juntos = { expenseNature: "shared" as const };
+    const karina = { expenseNature: "individual" as const, expenseMemberId: "m-karina", expenseMemberName: "Karina" };
+    const result = summarize(
+      [
+        record(30000, { ...casa, category: mercado }),
+        record(8000, { ...juntos, category: restaurantes }),
+        record(2000, { ...juntos, category: restaurantes, direction: "inflow", description: "ESTORNO IFOOD" }),
+        record(12000, { ...karina }),
+        record(5000, {}),
+        record(20000, { ...casa, category: transferencia }),
+      ],
+      billTotals,
+      fullMonth("2026-11"),
+    );
+
+    expect(result.byExpenseNature).toEqual([
+      { key: "household", label: "Casa", totalCents: 30000, count: 1 },
+      { key: "integrante-m-karina", label: "Karina", totalCents: 12000, count: 1 },
+      { key: "shared", label: "Compartilhado", totalCents: 6000, count: 1 },
+      { key: "sem-definicao", label: "Sem definição", totalCents: 5000, count: 1 },
+    ]);
+    expect(result).toMatchObject({ undefinedNatureCents: 5000, undefinedNatureCount: 1 });
+    expect(result.byMember).toEqual([{ key: "Lucas", label: "Lucas", totalCents: 53000, count: 4 }]);
   });
 });
 

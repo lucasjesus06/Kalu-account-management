@@ -26,6 +26,7 @@ import {
   type CardTransaction,
   type ClosedBillComposition,
 } from "@/domain/bills";
+import { expenseMembers, expenseSelection, joinExpenseMember } from "./expense-nature";
 
 export type CardBills = { open: BillComposition; closed: ClosedBillComposition[] };
 
@@ -146,9 +147,11 @@ export async function getCardBillDetail(householdId: string, accountId: string, 
         categorySlug: categories.slug,
         categoryName: categories.name,
         categoryKind: categories.kind,
+        ...expenseSelection,
       })
       .from(transactions)
       .leftJoin(categories, eq(categories.id, transactions.categoryId))
+      .leftJoin(expenseMembers, joinExpenseMember)
       .where(eq(transactions.accountId, accountId)),
   ]);
 

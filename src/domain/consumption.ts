@@ -1,5 +1,6 @@
 import type { BillLine } from "./bill-details";
 import { classifyCardTransaction } from "./bills";
+import { expenseNatureKey, expenseNatureLabel, UNDEFINED_NATURE_KEY } from "./expense-nature";
 import type { Cents } from "./money";
 import { contains, type Period } from "./periods";
 import { statementNature } from "./statement";
@@ -30,8 +31,11 @@ export type PeriodSummary = {
   billPaymentsFromAccountsCents: Cents;
   uncategorizedCents: Cents;
   uncategorizedCount: number;
+  undefinedNatureCents: Cents;
+  undefinedNatureCount: number;
   pendingCount: number;
   byCategory: Breakdown[];
+  byExpenseNature: Breakdown[];
   byMember: Breakdown[];
   byOrigin: Breakdown[];
   byMerchant: Breakdown[];
@@ -94,13 +98,17 @@ export function summarize(records: readonly ConsumptionRecord[], billTotals: rea
     billPaymentsFromAccountsCents: 0,
     uncategorizedCents: 0,
     uncategorizedCount: 0,
+    undefinedNatureCents: 0,
+    undefinedNatureCount: 0,
     pendingCount: 0,
     byCategory: [],
+    byExpenseNature: [],
     byMember: [],
     byOrigin: [],
     byMerchant: [],
   };
   const byCategory = new Map<string, Breakdown>();
+  const byExpenseNature = new Map<string, Breakdown>();
   const byMember = new Map<string, Breakdown>();
   const byOrigin = new Map<string, Breakdown>();
   const byMerchant = new Map<string, Breakdown>();
@@ -149,6 +157,17 @@ export function summarize(records: readonly ConsumptionRecord[], billTotals: rea
     }
 
     addTo(byCategory, record.category?.slug ?? UNCATEGORIZED_KEY, record.category?.name ?? UNCATEGORIZED_LABEL, cents, isPurchase);
+    const expense = {
+      nature: record.expenseNature,
+      memberId: record.expenseMemberId,
+      memberName: record.expenseMemberName,
+    };
+    const natureKey = expenseNatureKey(expense);
+    if (natureKey === UNDEFINED_NATURE_KEY) {
+      summary.undefinedNatureCents += cents;
+      summary.undefinedNatureCount += isPurchase ? 1 : 0;
+    }
+    addTo(byExpenseNature, natureKey, expenseNatureLabel(expense), cents, isPurchase);
     addTo(byMember, record.memberName, record.memberName, cents, isPurchase);
     addTo(
       byOrigin,
@@ -163,6 +182,7 @@ export function summarize(records: readonly ConsumptionRecord[], billTotals: rea
 
   summary.averageTicketCents = summary.purchasesCount > 0 ? Math.round(purchasesCents / summary.purchasesCount) : 0;
   summary.byCategory = sorted(byCategory);
+  summary.byExpenseNature = sorted(byExpenseNature);
   summary.byMember = sorted(byMember);
   summary.byOrigin = sorted(byOrigin);
   summary.byMerchant = sorted(byMerchant);
