@@ -1,13 +1,11 @@
 import "server-only";
-import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb } from "@/db/client";
 import {
   categories,
   expenseNatureRules,
-  financialAccounts,
   householdMembers,
-  integrationConnections,
   transactions,
 } from "@/db/schema";
 import {
@@ -18,6 +16,8 @@ import {
 } from "@/domain/expense-nature";
 import { UUID_PATTERN, type ActionResult } from "./connections";
 import type { CorrectionScope } from "./categorization";
+import { listHouseholdMembers } from "./profiles";
+import { accountVisibleTo } from "./scope";
 import { recordChange } from "./change-log";
 
 type Db = ReturnType<typeof getDb>;
@@ -35,15 +35,6 @@ export const expenseSelection = {
 };
 
 export const joinExpenseMember = eq(expenseMembers.id, transactions.expenseMemberId);
-
-export function householdAccountIds(householdId: string) {
-  return getDb()
-    .select({ id: financialAccounts.id })
-    .from(financialAccounts)
-    .innerJoin(integrationConnections, eq(integrationConnections.id, financialAccounts.connectionId))
-    .innerJoin(householdMembers, eq(householdMembers.id, integrationConnections.memberId))
-    .where(eq(householdMembers.householdId, householdId));
-}
 
 export async function loadExpenseNatureRules(db: Executor, householdId: string) {
   const rows = await db
@@ -103,9 +94,11 @@ export async function refreshExpenseNature(db: Executor, scope: SQL, rules: Read
   return changed.length;
 }
 
-export async function refreshHouseholdExpenseNature(db: Executor, householdId: string, scope: SQL) {
-  const rules = await loadExpenseNatureRules(db, householdId);
-  return refreshExpenseNature(db, and(scope, inArray(transactions.accountId, householdAccountIds(householdId)))!, rules);
+export type Editor = { memberId: string; householdId: string | null };
+
+export async function refreshEditableExpenseNature(db: Executor, editor: Editor, scope: SQL) {
+  const rules = editor.householdId ? await loadExpenseNatureRules(db, editor.householdId) : new Map<string, ExpenseAssignment>();
+  return refreshExpenseNature(db, and(scope, accountVisibleTo(editor.memberId, transactions.accountId))!, rules);
 }
 
 function countLabel(count: number) {
@@ -113,7 +106,7 @@ function countLabel(count: number) {
 }
 
 export async function correctExpenseNature(
-  member: { memberId: string; householdId: string },
+  member: Editor,
   transactionId: string,
   choice: string,
   scope: CorrectionScope,
@@ -121,12 +114,13 @@ export async function correctExpenseNature(
   if (!UUID_PATTERN.test(transactionId)) {
     return { ok: false, error: "Transação inválida." };
   }
+  if (!member.householdId) {
+    return { ok: false, error: "Para quem o gasto é só definido dentro de uma residência." };
+  }
+  const householdId = member.householdId;
 
   const db = getDb();
-  const members = await db
-    .select({ id: householdMembers.id, displayName: householdMembers.displayName })
-    .from(householdMembers)
-    .where(eq(householdMembers.householdId, member.householdId));
+  const members = await listHouseholdMembers(householdId);
   const assignment = parseExpenseChoice(
     choice,
     members.map((m) => m.id),
@@ -147,7 +141,7 @@ export async function correctExpenseNature(
       expenseMemberId: transactions.expenseMemberId,
     })
     .from(transactions)
-    .where(and(eq(transactions.id, transactionId), inArray(transactions.accountId, householdAccountIds(member.householdId))));
+    .where(and(eq(transactions.id, transactionId), accountVisibleTo(member.memberId, transactions.accountId)));
   if (!transaction) {
     return { ok: false, error: "Transação não encontrada." };
   }
@@ -166,7 +160,7 @@ export async function correctExpenseNature(
   });
   const logChange = (executor: Parameters<typeof recordChange>[0], affectedCount: number) =>
     recordChange(executor, {
-      householdId: member.householdId,
+      householdId,
       memberId: member.memberId,
       kind: "expense_changed",
       subject: merchant,
@@ -197,7 +191,7 @@ export async function correctExpenseNature(
     await tx
       .insert(expenseNatureRules)
       .values({
-        householdId: member.householdId,
+        householdId,
         merchantName: merchant,
         expenseNature: rule.nature,
         expenseMemberId: rule.memberId,
@@ -229,7 +223,7 @@ export async function correctExpenseNature(
       .where(
         and(
           eq(transactions.merchantName, merchant),
-          inArray(transactions.accountId, householdAccountIds(member.householdId)),
+          accountVisibleTo(member.memberId, transactions.accountId),
           sql`${transactions.expenseNatureSource} is distinct from 'user'`,
           sql`(${transactions.expenseNature}, ${transactions.expenseMemberId}, ${transactions.expenseNatureSource}) is distinct from (${rule.nature}::text, ${rule.memberId}::uuid, 'rule'::text)`,
         ),

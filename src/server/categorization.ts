@@ -1,10 +1,11 @@
 import "server-only";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { categories, categoryRules, transactions } from "@/db/schema";
 import { UUID_PATTERN, type ActionResult } from "./connections";
 import { recordChange } from "./change-log";
-import { householdAccountIds, refreshHouseholdExpenseNature } from "./expense-nature";
+import { refreshEditableExpenseNature, type Editor } from "./expense-nature";
+import { accountVisibleTo } from "./scope";
 
 export const correctionScopes = ["transaction", "merchant", "merchant_history"] as const;
 export type CorrectionScope = (typeof correctionScopes)[number];
@@ -17,7 +18,7 @@ export async function listCategories() {
 }
 
 export async function correctCategory(
-  member: { memberId: string; householdId: string },
+  member: Editor,
   transactionId: string,
   categoryId: string | null,
   scope: CorrectionScope,
@@ -27,6 +28,9 @@ export async function correctCategory(
   }
   if (categoryId === null && scope !== "transaction") {
     return { ok: false, error: "Escolha uma categoria para criar uma regra." };
+  }
+  if (scope !== "transaction" && !member.householdId) {
+    return { ok: false, error: "Regras de categoria só existem dentro de uma residência." };
   }
 
   const db = getDb();
@@ -39,7 +43,7 @@ export async function correctCategory(
     })
     .from(transactions)
     .leftJoin(categories, eq(categories.id, transactions.categoryId))
-    .where(and(eq(transactions.id, transactionId), inArray(transactions.accountId, householdAccountIds(member.householdId))));
+    .where(and(eq(transactions.id, transactionId), accountVisibleTo(member.memberId, transactions.accountId)));
   if (!transaction) {
     return { ok: false, error: "Transação não encontrada." };
   }
@@ -58,8 +62,11 @@ export async function correctCategory(
   const merchant = transaction.merchantName ?? transaction.description;
   const categoryLabel = category?.name ?? "Sem categoria";
   const previousLabel = transaction.categoryName ?? "Sem categoria";
-  const logChange = (executor: Parameters<typeof recordChange>[0], affectedCount: number) =>
-    recordChange(executor, {
+  const logChange = async (executor: Parameters<typeof recordChange>[0], affectedCount: number) => {
+    if (!member.householdId) {
+      return;
+    }
+    await recordChange(executor, {
       householdId: member.householdId,
       memberId: member.memberId,
       kind: "category_changed",
@@ -69,6 +76,7 @@ export async function correctCategory(
       newValue: categoryLabel,
       affectedCount,
     });
+  };
 
   if (scope === "transaction") {
     await db.transaction(async (tx) => {
@@ -78,7 +86,7 @@ export async function correctCategory(
         .where(eq(transactions.id, transaction.id));
       await logChange(tx, 1);
     });
-    await refreshHouseholdExpenseNature(db, member.householdId, eq(transactions.id, transaction.id));
+    await refreshEditableExpenseNature(db, member, eq(transactions.id, transaction.id));
     return { ok: true, message: `Categoria alterada para ${categoryLabel} somente nesta transação.` };
   }
 
@@ -86,7 +94,7 @@ export async function correctCategory(
     await tx
       .insert(categoryRules)
       .values({
-        householdId: member.householdId,
+        householdId: member.householdId!,
         merchantName: merchant,
         categoryId: category!.id,
         createdByMemberId: member.memberId,
@@ -111,7 +119,7 @@ export async function correctCategory(
       .where(
         and(
           eq(transactions.merchantName, merchant),
-          inArray(transactions.accountId, householdAccountIds(member.householdId)),
+          accountVisibleTo(member.memberId, transactions.accountId),
           sql`${transactions.categorySource} is distinct from 'user'`,
           sql`${transactions.categoryId} is distinct from ${category!.id}`,
         ),
@@ -120,9 +128,9 @@ export async function correctCategory(
     await logChange(tx, updated.length + 1);
     return updated.length;
   });
-  await refreshHouseholdExpenseNature(
+  await refreshEditableExpenseNature(
     db,
-    member.householdId,
+    member,
     scope === "merchant_history" ? eq(transactions.merchantName, merchant) : eq(transactions.id, transaction.id),
   );
 

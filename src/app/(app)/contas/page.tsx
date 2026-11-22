@@ -8,9 +8,9 @@ import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { fromCents } from "@/domain/money";
 import { formatDateTime, formatIsoDate } from "@/lib/format";
-import { listHouseholdAccounts } from "@/server/accounts";
-import { listHouseholdCardBills } from "@/server/bills";
-import { getCurrentMember } from "@/server/auth";
+import { listAccounts } from "@/server/accounts";
+import { listCardBills } from "@/server/bills";
+import { getCurrentContext } from "@/server/auth";
 
 export const metadata: Metadata = {
   title: "Contas · Kalu",
@@ -28,14 +28,11 @@ function plural(total: number, singular: string, pluralForm: string) {
 }
 
 async function AccountsContent() {
-  const member = await getCurrentMember();
-  if (!member) {
-    return <p className="text-muted-foreground">Sua conta ainda não está vinculada a uma residência.</p>;
-  }
+  const { scope } = await getCurrentContext();
 
   const [accounts, cardBills] = await Promise.all([
-    listHouseholdAccounts(member.householdId),
-    listHouseholdCardBills(member.householdId),
+    listAccounts(scope),
+    listCardBills(scope),
   ]);
 
   if (accounts.length === 0) {

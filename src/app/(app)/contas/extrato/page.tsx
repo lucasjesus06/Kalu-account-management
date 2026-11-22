@@ -11,7 +11,7 @@ import { fromCents } from "@/domain/money";
 import { statementNature } from "@/domain/statement";
 import { formatMonth } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
+import { getCurrentContext, listHouseholdMembers } from "@/server/auth";
 import { listCategories } from "@/server/categorization";
 import { getAccountStatement } from "@/server/statement";
 import { CategoryCorrectionProvider } from "../category-correction";
@@ -22,16 +22,13 @@ export const metadata: Metadata = {
 };
 
 async function StatementContent({ searchParams }: Pick<PageProps<"/contas/extrato">, "searchParams">) {
-  const member = await getCurrentMember();
-  if (!member) {
-    return <p className="text-muted-foreground">Sua conta ainda não está vinculada a uma residência.</p>;
-  }
+  const { scope, household } = await getCurrentContext();
 
   const { conta, mes } = await searchParams;
   const [statement, categories, members] = await Promise.all([
-    getAccountStatement(member.householdId, typeof conta === "string" ? conta : "", typeof mes === "string" ? mes : undefined),
+    getAccountStatement(scope, typeof conta === "string" ? conta : "", typeof mes === "string" ? mes : undefined),
     listCategories(),
-    listHouseholdMembers(member.householdId),
+    household ? listHouseholdMembers(household.householdId) : [],
   ]);
   if (!statement) {
     notFound();

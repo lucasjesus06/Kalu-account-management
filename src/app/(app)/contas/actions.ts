@@ -1,7 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { getCurrentMember } from "@/server/auth";
+import { getCurrentContext } from "@/server/auth";
 import { evaluateAndNotify } from "@/server/budget";
 import { correctCategory, correctionScopes, type CorrectionScope } from "@/server/categorization";
 import { correctExpenseNature } from "@/server/expense-nature";
@@ -12,10 +12,7 @@ function field(formData: FormData, name: string) {
 }
 
 export async function classifyTransactionAction(_prevState: FormState, formData: FormData): Promise<FormState> {
-  const member = await getCurrentMember();
-  if (!member) {
-    return { ok: false, error: "Sua conta ainda não está vinculada a uma residência." };
-  }
+  const { editor, household } = await getCurrentContext();
 
   const scope = field(formData, "scope");
   if (!correctionScopes.includes(scope as CorrectionScope)) {
@@ -33,21 +30,23 @@ export async function classifyTransactionAction(_prevState: FormState, formData:
 
   const messages: string[] = [];
   if (categoryChanged) {
-    const result = await correctCategory(member, transactionId, categoryId || null, scope as CorrectionScope);
+    const result = await correctCategory(editor, transactionId, categoryId || null, scope as CorrectionScope);
     if (!result.ok) {
       return result;
     }
     messages.push(result.message);
   }
   if (expenseChanged) {
-    const result = await correctExpenseNature(member, transactionId, expense, scope as CorrectionScope);
+    const result = await correctExpenseNature(editor, transactionId, expense, scope as CorrectionScope);
     if (!result.ok) {
       refresh();
       return messages.length > 0 ? { ok: false, error: `${messages.join(" ")} ${result.error}` } : result;
     }
     messages.push(result.message);
   }
-  await evaluateAndNotify(member.householdId, new Date()).catch((error) => console.error("Falha ao avaliar as metas", error));
+  if (household) {
+    await evaluateAndNotify(household.householdId, new Date()).catch((error) => console.error("Falha ao avaliar as metas", error));
+  }
   refresh();
   return { ok: true, message: messages.join(" ") };
 }

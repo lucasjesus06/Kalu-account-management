@@ -12,7 +12,7 @@ import type { CategoryGroup } from "@/domain/bill-details";
 import { fromCents } from "@/domain/money";
 import { formatIsoDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
+import { getCurrentContext, listHouseholdMembers } from "@/server/auth";
 import { getCardBillDetail, OPEN_CYCLE } from "@/server/bills";
 import { listCategories } from "@/server/categorization";
 import { CategoryCorrectionProvider } from "../category-correction";
@@ -71,16 +71,13 @@ function CategoryGroupItem({ group, base }: { group: CategoryGroup; base: number
 }
 
 async function BillContent({ searchParams }: Pick<PageProps<"/contas/fatura">, "searchParams">) {
-  const member = await getCurrentMember();
-  if (!member) {
-    return <p className="text-muted-foreground">Sua conta ainda não está vinculada a uma residência.</p>;
-  }
+  const { scope, household } = await getCurrentContext();
 
   const { cartao, ciclo } = await searchParams;
   const [detail, categories, members] = await Promise.all([
-    getCardBillDetail(member.householdId, typeof cartao === "string" ? cartao : "", typeof ciclo === "string" ? ciclo : undefined),
+    getCardBillDetail(scope, typeof cartao === "string" ? cartao : "", typeof ciclo === "string" ? ciclo : undefined),
     listCategories(),
-    listHouseholdMembers(member.householdId),
+    household ? listHouseholdMembers(household.householdId) : [],
   ]);
   if (!detail) {
     notFound();

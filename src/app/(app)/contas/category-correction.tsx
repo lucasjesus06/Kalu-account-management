@@ -40,6 +40,7 @@ function CorrectionForm({
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(classifyTransactionAction, null);
   const current = categories.find((category) => category.slug === target.categorySlug);
+  const shared = members.length > 0;
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
@@ -74,6 +75,8 @@ function CorrectionForm({
         </select>
       </div>
 
+      {shared ? (
+        <>
       <div className="flex flex-col gap-2">
         <Label htmlFor="expense">Para quem</Label>
         <select id="expense" name="expense" defaultValue={target.expenseChoice} className={selectClassName}>
@@ -108,6 +111,10 @@ function CorrectionForm({
           por regras.
         </p>
       </fieldset>
+        </>
+      ) : (
+        <input type="hidden" name="scope" value="transaction" />
+      )}
 
       <FormFeedback state={state} />
 

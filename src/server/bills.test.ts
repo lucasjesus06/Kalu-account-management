@@ -1,3 +1,4 @@
+import { householdScope } from "@/domain/scope";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -7,7 +8,7 @@ import {
   integrationConnections,
   transactions,
 } from "@/db/schema";
-import { createTestDatabase, seedHousehold } from "@/test/database";
+import { createTestDatabase, seedHousehold, shareWithMemberHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock("@/db/client", () => ({ getDb: () => state.db }));
@@ -49,6 +50,7 @@ beforeEach(async () => {
     })
     .returning();
   cardId = card.id;
+  await shareWithMemberHousehold(db(), cardId, lucas.id);
   await db()
     .insert(creditCardBills)
     .values([
@@ -74,7 +76,7 @@ beforeEach(async () => {
 
 describe("detalhe da fatura", () => {
   it("abre na fatura aberta e lista os ciclos do mais recente para o mais antigo", async () => {
-    const detail = await getCardBillDetail(householdId, cardId, undefined);
+    const detail = await getCardBillDetail(householdScope(householdId), cardId, undefined);
 
     expect(detail!.cycles).toEqual([
       { key: OPEN_CYCLE, dueDate: null },
@@ -86,7 +88,7 @@ describe("detalhe da fatura", () => {
   });
 
   it("detalha a fatura fechada por categoria, estabelecimento, créditos e parcelas futuras", async () => {
-    const detail = await getCardBillDetail(householdId, cardId, NOVEMBRO);
+    const detail = await getCardBillDetail(householdScope(householdId), cardId, NOVEMBRO);
 
     expect(detail!.selected).toMatchObject({
       key: NOVEMBRO,
@@ -103,26 +105,26 @@ describe("detalhe da fatura", () => {
   });
 
   it("considera paga a fatura cujo pagamento aparece no ciclo seguinte", async () => {
-    const outubro = await getCardBillDetail(householdId, cardId, OUTUBRO);
-    const novembro = await getCardBillDetail(householdId, cardId, NOVEMBRO);
+    const outubro = await getCardBillDetail(householdScope(householdId), cardId, OUTUBRO);
+    const novembro = await getCardBillDetail(householdScope(householdId), cardId, NOVEMBRO);
 
     expect(outubro!.selected).toMatchObject({ paidCents: 50000, status: "paid" });
     expect(novembro!.selected).toMatchObject({ paidCents: 30000, status: "partially_paid" });
   });
 
   it("volta para a fatura aberta quando o ciclo pedido não existe", async () => {
-    const detail = await getCardBillDetail(householdId, cardId, "inexistente");
+    const detail = await getCardBillDetail(householdScope(householdId), cardId, "inexistente");
 
     expect(detail!.selected.key).toBe(OPEN_CYCLE);
   });
 
   it("trata identificador inválido como cartão inexistente", async () => {
-    expect(await getCardBillDetail(householdId, "nao-e-uuid", undefined)).toBeNull();
+    expect(await getCardBillDetail(householdScope(householdId), "nao-e-uuid", undefined)).toBeNull();
   });
 
   it("não mostra cartão de outra residência", async () => {
     const outra = await seedHousehold(db());
 
-    expect(await getCardBillDetail(outra.household.id, cardId, undefined)).toBeNull();
+    expect(await getCardBillDetail(householdScope(outra.household.id), cardId, undefined)).toBeNull();
   });
 });

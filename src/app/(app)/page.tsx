@@ -14,8 +14,8 @@ import { fromCents } from "@/domain/money";
 import { monthOf } from "@/domain/periods";
 import { formatDateTime, formatMonth, formatPeriod } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
-import { listHouseholdCardBills } from "@/server/bills";
+import { getCurrentContext, listHouseholdMembers } from "@/server/auth";
+import { listCardBills } from "@/server/bills";
 import { listConnections } from "@/server/connections";
 import { getBudgetOverview } from "@/server/budget";
 import { getConsumptionComparison } from "@/server/consumption";
@@ -30,19 +30,16 @@ function capitalize(text: string) {
 }
 
 async function HomeContent() {
-  const member = await getCurrentMember();
-
-  if (!member) {
-    return <PageHeader title="Kalu" description="Sua conta ainda não está vinculada a uma residência." />;
-  }
+  const { profile, scope, household } = await getCurrentContext();
+  const inHousehold = household !== null;
 
   const now = new Date();
   const [members, connections, comparison, cardBills, goals] = await Promise.all([
-    listHouseholdMembers(member.householdId),
-    listConnections(member.memberId),
-    getConsumptionComparison(member.householdId, undefined, undefined, now),
-    listHouseholdCardBills(member.householdId),
-    getBudgetOverview(member.householdId, monthOf(now)),
+    household ? listHouseholdMembers(household.householdId) : [],
+    listConnections(profile.memberId),
+    getConsumptionComparison(scope, undefined, undefined, now),
+    listCardBills(scope),
+    household ? getBudgetOverview(household.householdId, monthOf(now)) : [],
   ]);
 
   const alerts = connections.flatMap((connection) => {
@@ -64,7 +61,7 @@ async function HomeContent() {
       <div className="flex flex-col gap-2">
         <PageHeader
           title={capitalize(formatMonth(comparison.month))}
-          description={`${member.householdName} · ${namesFormat.format(members.map((m) => m.displayName))}`}
+          description={household ? `${household.householdName} · ${namesFormat.format(members.map((m) => m.displayName))}` : "Espaço pessoal"}
         />
         {hasData && (
           <p className="text-sm text-muted-foreground">
@@ -85,7 +82,7 @@ async function HomeContent() {
       {hasData ? (
         <>
           <section className="rounded-2xl border bg-card p-6 text-card-foreground sm:p-8">
-            <h2 className="text-sm text-muted-foreground">Vocês gastaram neste mês</h2>
+            <h2 className="text-sm text-muted-foreground">{inHousehold ? "Vocês gastaram neste mês" : "Você gastou neste mês"}</h2>
             <Money
               value={fromCents(current.consumptionCents)}
               className="mt-2 block font-display text-4xl font-bold text-primary sm:text-5xl"
@@ -171,7 +168,7 @@ async function HomeContent() {
             </Button>
           </Panel>
 
-          {current.consumptionCents > 0 && (
+          {inHousehold && current.consumptionCents > 0 && (
             <Panel title="Para quem foi" icon={Users}>
               {natures.length > 0 && (
                 <ul className="flex flex-col divide-y">
@@ -204,27 +201,29 @@ async function HomeContent() {
             </Panel>
           )}
 
-          <Panel title="Metas do mês" icon={Target}>
-            {goals.length === 0 ? (
-              <p className="text-muted-foreground">
-                Defina um limite por mês para uma categoria ou para todo o consumo, e o Kalu avisa quando chegar perto.
-              </p>
-            ) : (
-              <ul className="flex flex-col divide-y">
-                {[...goals]
-                  .sort((a, b) => b.progress.percent - a.progress.percent)
-                  .map(({ goal, label, progress }) => (
-                    <GoalProgressItem key={goal.id} goal={goal} label={label} progress={progress} />
-                  ))}
-              </ul>
-            )}
-            <Button asChild variant="outline" className="mt-5">
-              <Link href="/metas">
-                {goals.length === 0 ? "Criar meta" : "Gerenciar metas"}
-                <ArrowRight />
-              </Link>
-            </Button>
-          </Panel>
+          {inHousehold && (
+            <Panel title="Metas do mês" icon={Target}>
+              {goals.length === 0 ? (
+                <p className="text-muted-foreground">
+                  Defina um limite por mês para uma categoria ou para todo o consumo, e o Kalu avisa quando chegar perto.
+                </p>
+              ) : (
+                <ul className="flex flex-col divide-y">
+                  {[...goals]
+                    .sort((a, b) => b.progress.percent - a.progress.percent)
+                    .map(({ goal, label, progress }) => (
+                      <GoalProgressItem key={goal.id} goal={goal} label={label} progress={progress} />
+                    ))}
+                </ul>
+              )}
+              <Button asChild variant="outline" className="mt-5">
+                <Link href="/metas">
+                  {goals.length === 0 ? "Criar meta" : "Gerenciar metas"}
+                  <ArrowRight />
+                </Link>
+              </Button>
+            </Panel>
+          )}
         </>
       ) : (
         <Panel title="Seus gastos" icon={PieChart}>

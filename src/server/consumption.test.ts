@@ -1,6 +1,7 @@
+import { householdScope } from "@/domain/scope";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { categories, creditCardBills, financialAccounts, integrationConnections, transactions } from "@/db/schema";
-import { createTestDatabase, seedHousehold } from "@/test/database";
+import { createTestDatabase, seedHousehold, shareWithMemberHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock("@/db/client", () => ({ getDb: () => state.db }));
@@ -23,6 +24,7 @@ async function account(memberId: string, kind: "checking" | "credit_card", name:
     .insert(financialAccounts)
     .values({ connectionId: connection.id, externalId: name, kind, name, currency: "BRL", balanceCents: 0, ...extra })
     .returning();
+  await shareWithMemberHousehold(db(), row.id, memberId);
   return row.id;
 }
 
@@ -65,7 +67,7 @@ beforeEach(async () => {
 
 describe("consumo da residência", () => {
   it("carrega só as transações da residência, com conta, integrante e categoria", async () => {
-    const { records, billTotals } = await loadConsumptionRecords(householdId);
+    const { records, billTotals } = await loadConsumptionRecords(householdScope(householdId));
 
     expect(records).toHaveLength(8);
     expect(billTotals).toEqual([403477]);
@@ -78,7 +80,7 @@ describe("consumo da residência", () => {
   });
 
   it("compara o mês corrente com o mesmo intervalo do mês anterior", async () => {
-    const comparison = await getConsumptionComparison(householdId, undefined, undefined, NOW);
+    const comparison = await getConsumptionComparison(householdScope(householdId), undefined, undefined, NOW);
 
     expect(comparison.month).toBe("2026-11");
     expect(comparison.compareTo).toBe("2026-10");
@@ -98,19 +100,19 @@ describe("consumo da residência", () => {
   });
 
   it("compara meses inteiros escolhidos", async () => {
-    const comparison = await getConsumptionComparison(householdId, "2026-10", "2026-11", NOW);
+    const comparison = await getConsumptionComparison(householdScope(householdId), "2026-10", "2026-11", NOW);
 
     expect(comparison.periods.partial).toBe(false);
     expect(comparison.current.consumptionCents).toBe(20000 + 99900);
   });
 
   it("usa o mês corrente e o anterior quando os meses pedidos são inválidos ou iguais", async () => {
-    expect(await getConsumptionComparison(householdId, "2026-13", "x", NOW)).toMatchObject({ month: "2026-11", compareTo: "2026-10" });
-    expect(await getConsumptionComparison(householdId, "2026-09", "2026-09", NOW)).toMatchObject({ month: "2026-09", compareTo: "2026-08" });
+    expect(await getConsumptionComparison(householdScope(householdId), "2026-13", "x", NOW)).toMatchObject({ month: "2026-11", compareTo: "2026-10" });
+    expect(await getConsumptionComparison(householdScope(householdId), "2026-09", "2026-09", NOW)).toMatchObject({ month: "2026-09", compareTo: "2026-08" });
   });
 
   it("informa a cobertura dos dados, saldos e limite utilizado", async () => {
-    expect(await getDataCoverage(householdId)).toEqual({
+    expect(await getDataCoverage(householdScope(householdId))).toEqual({
       firstTransactionAt: new Date("2026-10-05T12:00:00-03:00"),
       lastTransactionAt: new Date("2026-11-09T12:00:00-03:00"),
       transactionsCount: 8,
@@ -119,6 +121,6 @@ describe("consumo da residência", () => {
       creditUsedCents: 300000,
       creditLimitCents: 800000,
     });
-    expect((await getDataCoverage(otherHouseholdId)).transactionsCount).toBe(1);
+    expect((await getDataCoverage(householdScope(otherHouseholdId))).transactionsCount).toBe(1);
   });
 });
