@@ -25,6 +25,7 @@ function line(amountCents: number, overrides: Partial<BillLine> = {}): BillLine 
     occurredAt: new Date(Date.UTC(2026, 9, sequence)),
     merchantName: "LOJA",
     category: null,
+    categorySource: null,
     installmentNumber: null,
     installmentTotal: null,
     ...overrides,

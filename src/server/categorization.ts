@@ -16,7 +16,7 @@ export type CorrectionScope = (typeof correctionScopes)[number];
 
 export async function listCategories() {
   return getDb()
-    .select({ id: categories.id, name: categories.name })
+    .select({ id: categories.id, slug: categories.slug, name: categories.name })
     .from(categories)
     .orderBy(asc(categories.sortOrder));
 }

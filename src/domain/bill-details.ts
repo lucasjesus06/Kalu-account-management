@@ -6,6 +6,7 @@ export type BillLine = CardTransaction & {
   occurredAt: Date;
   merchantName: string | null;
   category: { slug: string; name: string } | null;
+  categorySource: "automatic" | "rule" | "user" | null;
   installmentNumber: number | null;
   installmentTotal: number | null;
 };

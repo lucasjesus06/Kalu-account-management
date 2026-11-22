@@ -142,6 +142,7 @@ export async function getCardBillDetail(householdId: string, accountId: string, 
         merchantName: transactions.merchantName,
         installmentNumber: transactions.installmentNumber,
         installmentTotal: transactions.installmentTotal,
+        categorySource: transactions.categorySource,
         categorySlug: categories.slug,
         categoryName: categories.name,
       })
