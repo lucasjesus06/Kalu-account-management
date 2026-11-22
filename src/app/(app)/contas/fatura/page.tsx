@@ -8,23 +8,19 @@ import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/panel";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
-import type { BillLine, CategoryGroup } from "@/domain/bill-details";
+import type { CategoryGroup } from "@/domain/bill-details";
 import { fromCents } from "@/domain/money";
-import { formatDate, formatIsoDate } from "@/lib/format";
+import { formatIsoDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { getCurrentMember } from "@/server/auth";
 import { getCardBillDetail, OPEN_CYCLE } from "@/server/bills";
 import { listCategories } from "@/server/categorization";
-import { CategoryCorrectionProvider, CorrectCategoryButton } from "./category-correction";
+import { CategoryCorrectionProvider } from "../category-correction";
+import { TransactionRow } from "../transaction-row";
 
 export const metadata: Metadata = {
   title: "Fatura · Kalu",
 };
-
-const sourceLabels = {
-  rule: "regra da residência",
-  user: "ajustada por vocês",
-} as const;
 
 const paymentBadges = {
   paid: { label: "Paga", tone: "success" },
@@ -34,36 +30,6 @@ const paymentBadges = {
 
 function plural(total: number, singular: string, pluralForm: string) {
   return `${total} ${total === 1 ? singular : pluralForm}`;
-}
-
-function TransactionRow({ line }: { line: BillLine }) {
-  const isCredit = line.direction === "inflow";
-  return (
-    <li className="flex items-center justify-between gap-4 py-2.5 text-sm">
-      <div className="flex min-w-0 flex-col">
-        <span className="truncate">{line.merchantName ?? line.description}</span>
-        <span className="text-xs text-muted-foreground">
-          {formatDate(line.occurredAt)}
-          {line.installmentNumber !== null &&
-            line.installmentTotal !== null &&
-            line.installmentTotal > 1 &&
-            ` · parcela ${line.installmentNumber}/${line.installmentTotal}`}
-          {line.status === "pending" && " · pendente"}
-          {(line.categorySource === "rule" || line.categorySource === "user") && ` · ${sourceLabels[line.categorySource]}`}
-          {" · "}
-          <CorrectCategoryButton
-            transactionId={line.id}
-            merchant={line.merchantName ?? line.description}
-            categorySlug={line.category?.slug ?? null}
-          />
-        </span>
-      </div>
-      <Money
-        value={fromCents(isCredit ? -line.amountCents : line.amountCents)}
-        className={cn("shrink-0", isCredit && "text-success")}
-      />
-    </li>
-  );
 }
 
 function CategoryGroupItem({ group, base }: { group: CategoryGroup; base: number }) {
@@ -96,7 +62,7 @@ function CategoryGroupItem({ group, base }: { group: CategoryGroup; base: number
         </summary>
         <ul className="mb-3 flex flex-col divide-y rounded-xl bg-secondary/40 px-4">
           {group.lines.map((line) => (
-            <TransactionRow key={line.id} line={line} />
+            <TransactionRow key={line.id} line={line} variant="bill" />
           ))}
         </ul>
       </details>
@@ -310,7 +276,7 @@ async function BillContent({ searchParams }: Pick<PageProps<"/contas/fatura">, "
               ) : (
                 <ul className="flex flex-col divide-y">
                   {detail.credits.map((line) => (
-                    <TransactionRow key={line.id} line={line} />
+                    <TransactionRow key={line.id} line={line} variant="bill" />
                   ))}
                 </ul>
               )}

@@ -3,8 +3,8 @@
 import { createContext, useActionState, useContext, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { FormFeedback } from "../../conexoes/form-feedback";
-import type { FormState } from "../../conexoes/actions";
+import { FormFeedback } from "../conexoes/form-feedback";
+import type { FormState } from "../conexoes/actions";
 import { correctCategoryAction } from "./actions";
 
 type Target = { transactionId: string; merchant: string; categorySlug: string | null };
