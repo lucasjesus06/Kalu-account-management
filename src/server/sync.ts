@@ -268,7 +268,7 @@ function describeError(error: unknown) {
     return error.message;
   }
   if (error instanceof AuthorizationExpiredError) {
-    return "A autorização desta conexão expirou. Renove a conexão no Meu Pluggy para voltar a sincronizar.";
+    return "A autorização desta conexão expirou. Renove a autorização em Conexões para voltar a sincronizar.";
   }
   if (error instanceof EmptySourceError) {
     return "A Pluggy não retornou nenhuma conta desta conexão, o que costuma indicar autorização expirada. Nenhum dado foi alterado.";
