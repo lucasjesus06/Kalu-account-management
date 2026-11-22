@@ -260,13 +260,24 @@ Uma meta é um limite mensal de consumo, por categoria e por para quem (ou para 
 - Metas são versionadas por mês: editar num mês seguinte encerra a meta antiga no mês anterior e cria uma nova, preservando o histórico dos meses passados. Editar ou remover no mês de criação altera ou apaga a própria meta.
 - Só pode existir uma meta ativa por categoria e para quem.
 
+## Configurações
+
+A engrenagem no cabeçalho abre `/configuracoes`, com um menu e uma tela para cada assunto. Criar algo novo (residência, regra) é pelo botão + flutuante, que abre um balão com o formulário.
+
+- Conta: e-mail, nome de exibição, troca de senha (confere a senha atual, mínimo de 8 caracteres) e sair.
+- Família: residências, integrantes, convites, saída e transferência de administração.
+- Compartilhamento: para cada conta sua, escolher se fica só com você ou aparece numa residência.
+- Regras: o motor de regras da residência ativa. Lista as regras de categoria e de para quem, troca o resultado direto na linha, remove e cria novas, com sugestão de estabelecimentos já vistos nas transações. Criar ou trocar aplica ao histórico, sem substituir ajustes feitos à mão. Remover uma regra de categoria mantém as transações já classificadas, e remover uma de para quem devolve à classificação automática o que não foi ajustado à mão. Criação e remoção entram no histórico, filtro Regras.
+- Notificações: ativar os avisos de meta no dispositivo.
+- Conexões bancárias continua na tela própria, com atalho no menu.
+
 ## Espaço pessoal e compartilhamento
 
 Cada pessoa tem o próprio espaço financeiro e usa o Kalu sem criar residência. Uma residência é opcional e só consolida o que seus integrantes decidirem compartilhar.
 
 - As conexões, contas e transações pertencem ao titular (`integration_connections.member_id`). Uma residência não é dona de dado financeiro.
 - O compartilhamento é por conta, em `household_shared_accounts`: guarda só a referência da conta e a residência, sem copiar dados, e a conta fica em no máximo uma residência (índice único na conta). Entrar numa residência não compartilha nada sozinho.
-- O titular escolhe onde cada conta aparece em Conexões, no painel Compartilhamento (Privada ou uma das suas residências), e pode desfazer quando quiser. O histórico da residência registra quem compartilhou e quem deixou de compartilhar.
+- O titular escolhe onde cada conta aparece em Configurações, na tela Compartilhamento (Só eu ou uma das suas residências, salvo ao escolher), e pode desfazer quando quiser. O histórico da residência registra quem compartilhou e quem deixou de compartilhar.
 - O seletor no cabeçalho alterna entre Pessoal e cada residência da pessoa e só aparece para quem participa de alguma. O escolhido fica no cookie `kalu-escopo`; sem escolha, abre a primeira residência, ou o espaço pessoal para quem não tem residência.
 - Os valores da tela inicial, análise, contas, extrato, fatura e exportação seguem o escopo escolhido: no pessoal, as contas do titular; na residência, as contas compartilhadas com ela. Metas, histórico e avisos continuam sendo da residência e não aparecem no espaço pessoal.
 - Uma pessoa pode corrigir a classificação de transações de contas dela ou compartilhadas com uma residência da qual participa. No espaço pessoal, "para quem" e as regras por estabelecimento não se aplicam, só a correção de uma transação.
@@ -275,18 +286,18 @@ Cada pessoa tem o próprio espaço financeiro e usa o Kalu sem criar residência
 
 ## Residências
 
-Uma residência é criada à mão por quem quiser e reúne só o que os integrantes decidirem compartilhar. Fica em `/residencias` (ícone no cabeçalho).
+Uma residência é criada à mão por quem quiser e reúne só o que os integrantes decidirem compartilhar. Fica em Configurações, na tela Família.
 
 - Quem cria vira o administrador. Cada residência tem um administrador (índice único parcial) e os demais são integrantes. Uma pessoa pode participar de várias e usar o Kalu sem nenhuma.
 - O administrador gera um link de convite, que vale por 7 dias e serve para uma entrada só. O banco guarda apenas o hash (SHA-256) do código, então o link aparece uma vez, na hora de gerar. Convites pendentes podem ser cancelados.
-- Abrir o link sem sessão leva ao login e volta para o convite (`/login?next=`, só caminhos internos). Entrar não compartilha conta nenhuma e não dá acesso às contas de ninguém, cada pessoa escolhe depois em Conexões.
+- Abrir o link sem sessão leva ao login e volta para o convite (`/login?next=`, só caminhos internos). Entrar não compartilha conta nenhuma e não dá acesso às contas de ninguém, cada pessoa escolhe depois em Compartilhamento.
 - Quem sai, ou é removido pelo administrador, leva as contas que compartilhou de volta ao espaço privado, sem perder dados. O administrador precisa passar a administração antes de sair. O último integrante que sai encerra a residência, com metas, regras e histórico dela, e as contas continuam com os titulares.
 - Entrada, saída, remoção e troca de administrador entram no histórico da residência, no filtro Integrantes.
 - Não há grau de parentesco: qualquer integrante pode virar administrador.
 
 ## Histórico de alterações
 
-Toda mudança feita por uma pessoa fica registrada em `change_log` e aparece em `/historico` (atalho nas telas Contas e Metas), com filtro por Classificação, Metas, Compartilhamento e Integrantes.
+Toda mudança feita por uma pessoa fica registrada em `change_log` e aparece em `/historico` (atalho nas telas Contas e Metas), com filtro por Classificação, Metas, Compartilhamento, Integrantes e Regras.
 
 - Registra quem alterou, quando, o item (estabelecimento ou meta), o valor anterior, o novo valor e o alcance da correção.
 - Classificação: categoria e "para quem". Nas correções com regra, o valor anterior é o da transação clicada e a contagem informa quantas transações foram afetadas, incluindo o histórico do estabelecimento.

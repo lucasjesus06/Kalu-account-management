@@ -66,3 +66,7 @@ export async function getCurrentMember(): Promise<CurrentMember | null> {
 }
 
 export { listHouseholdMembers } from "./profiles";
+
+export async function getAccountEmail() {
+  return (await getAuthenticatedUser()).email;
+}

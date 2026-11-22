@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { KeyRound, Plug, Share2 } from "lucide-react";
+import { KeyRound, Plug } from "lucide-react";
 import { AuthorizationNotice } from "@/components/authorization-notice";
 import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/panel";
@@ -9,12 +9,9 @@ import { authorizationAlert } from "@/domain/authorization";
 import { getCurrentProfile } from "@/server/auth";
 import { formatDate, formatDateTime, formatTransactionChanges } from "@/lib/format";
 import { getCredentialsSummary, listConnections } from "@/server/connections";
-import { listHouseholdLinks } from "@/server/profiles";
-import { listOwnAccounts } from "@/server/sharing";
 import { latestSyncRuns } from "@/server/sync";
 import { ConnectBankButton } from "./connect-bank-button";
 import { ConnectionForm } from "./connection-form";
-import { ShareAccountForm } from "./share-account-form";
 import { CredentialsForm } from "./credentials-form";
 import { SyncButton } from "./sync-button";
 import { WebhookButton } from "./webhook-button";
@@ -34,11 +31,9 @@ async function ConnectionsContent() {
   const member = await getCurrentProfile();
 
 
-  const [credentials, connections, ownAccounts, households] = await Promise.all([
+  const [credentials, connections] = await Promise.all([
     getCredentialsSummary(member.memberId),
     listConnections(member.memberId),
-    listOwnAccounts(member.memberId),
-    listHouseholdLinks(member.memberId),
   ]);
   const runs = await latestSyncRuns(connections.map((connection) => connection.id));
   const now = new Date();
@@ -124,27 +119,6 @@ async function ConnectionsContent() {
           </details>
         </div>
       </Panel>
-
-      {households.length > 0 && ownAccounts.length > 0 && (
-        <Panel title="Compartilhamento" icon={Share2}>
-          <p className="mb-5 text-sm text-muted-foreground">
-            Suas contas são privadas. Escolha quais aparecem para uma residência: ela só enxerga as contas marcadas aqui, e você pode
-            desfazer quando quiser.
-          </p>
-          <ul className="flex flex-col divide-y">
-            {ownAccounts.map((account) => (
-              <li key={account.id} className="py-3 first:pt-0 last:pb-0">
-                <ShareAccountForm
-                  accountId={account.id}
-                  label={`${account.institutionName ?? "Instituição"} · ${account.name}${account.numberLast4 ? ` ••${account.numberLast4}` : ""}`}
-                  value={account.sharedHouseholdId ?? ""}
-                  households={households.map((link) => ({ id: link.householdId, name: link.householdName }))}
-                />
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      )}
 
       <Panel title="Credenciais da Pluggy" icon={KeyRound}>
         <p className="mb-5 text-sm text-muted-foreground">

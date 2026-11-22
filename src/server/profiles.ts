@@ -46,3 +46,7 @@ export async function listHouseholdMembers(householdId: string) {
     .where(eq(householdMemberships.householdId, householdId))
     .orderBy(asc(householdMemberships.createdAt), asc(householdMemberships.id));
 }
+
+export async function updateDisplayName(memberId: string, name: string) {
+  await getDb().update(householdMembers).set({ displayName: name }).where(eq(householdMembers.id, memberId));
+}

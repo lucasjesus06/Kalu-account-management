@@ -11,5 +11,5 @@ export async function acceptInviteAction(_prevState: FormState, formData: FormDa
   if (!result.ok) {
     return result;
   }
-  redirect("/residencias");
+  redirect("/configuracoes/familia");
 }
