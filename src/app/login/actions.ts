@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { safeNextPath } from "@/domain/invite";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export type SignInState = { error?: string };
@@ -20,7 +21,7 @@ export async function signIn(_prevState: SignInState, formData: FormData): Promi
     return { error: "E-mail ou senha inválidos." };
   }
 
-  redirect("/");
+  redirect(safeNextPath(formData.get("next")));
 }
 
 export async function signOut() {
