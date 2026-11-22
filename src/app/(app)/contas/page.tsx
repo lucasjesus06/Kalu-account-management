@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { CreditCard, Landmark } from "lucide-react";
+import { ArrowRight, CreditCard, Landmark } from "lucide-react";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -119,41 +119,49 @@ async function AccountsContent() {
               )}
 
               {bills && (
-                <div className="grid grid-cols-2 gap-4 border-t pt-4">
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <span className="text-sm text-muted-foreground">Fatura aberta</span>
-                    <Money value={fromCents(bills.open.netCents)} className="font-display text-lg font-bold" />
-                    <span className="text-xs text-muted-foreground">
-                      {plural(bills.open.purchasesCount, "compra", "compras")}
-                      {bills.open.pendingCents > 0 && (
-                        <>
-                          {" "}
-                          · <Money value={fromCents(bills.open.pendingCents)} /> pendente
-                        </>
-                      )}
-                    </span>
-                  </div>
-                  {lastBill && (
+                <div className="flex flex-col gap-4 border-t pt-4">
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="flex min-w-0 flex-col gap-1">
-                      <span className="text-sm text-muted-foreground">Última fatura</span>
-                      <Money value={fromCents(lastBill.officialTotalCents)} className="font-display text-lg font-bold" />
+                      <span className="text-sm text-muted-foreground">Fatura aberta</span>
+                      <Money value={fromCents(bills.open.netCents)} className="font-display text-lg font-bold" />
                       <span className="text-xs text-muted-foreground">
-                        Venc. {formatIsoDate(lastBill.dueDate)} ·{" "}
-                        {lastBill.unidentifiedCents > 0 ? (
+                        {plural(bills.open.purchasesCount, "compra", "compras")}
+                        {bills.open.pendingCents > 0 && (
                           <>
-                            <Money value={fromCents(lastBill.unidentifiedCents)} /> não identificado pela fonte
+                            {" "}
+                            · <Money value={fromCents(bills.open.pendingCents)} /> pendente
                           </>
-                        ) : lastBill.unidentifiedCents < 0 ? (
-                          <>
-                            compras <Money value={fromCents(-lastBill.unidentifiedCents)} /> acima do valor oficial
-                          </>
-                        ) : (
-                          "totalmente identificada"
                         )}
-                        {lastBill.incomplete && " · histórico incompleto"}
                       </span>
                     </div>
-                  )}
+                    {lastBill && (
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <span className="text-sm text-muted-foreground">Última fatura</span>
+                        <Money value={fromCents(lastBill.officialTotalCents)} className="font-display text-lg font-bold" />
+                        <span className="text-xs text-muted-foreground">
+                          Venc. {formatIsoDate(lastBill.dueDate)} ·{" "}
+                          {lastBill.unidentifiedCents > 0 ? (
+                            <>
+                              <Money value={fromCents(lastBill.unidentifiedCents)} /> não identificado pela fonte
+                            </>
+                          ) : lastBill.unidentifiedCents < 0 ? (
+                            <>
+                              compras <Money value={fromCents(-lastBill.unidentifiedCents)} /> acima do valor oficial
+                            </>
+                          ) : (
+                            "totalmente identificada"
+                          )}
+                          {lastBill.incomplete && " · histórico incompleto"}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <Button asChild variant="outline" size="sm" className="self-start">
+                    <Link href={`/contas/fatura?cartao=${account.id}`}>
+                      Ver fatura por categoria
+                      <ArrowRight />
+                    </Link>
+                  </Button>
                 </div>
               )}
 
