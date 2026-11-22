@@ -34,6 +34,7 @@ function record(amountCents: number, overrides: Partial<ConsumptionRecord> = {})
     accountName: "Cartão",
     institutionName: "Santander",
     memberName: "Lucas",
+    billDueDate: null,
     ...overrides,
   };
 }

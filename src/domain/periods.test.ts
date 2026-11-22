@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { comparablePeriods, contains, daysInMonth, fullMonth, isMonth, monthOf, shiftMonth } from "./periods";
+import { comparablePeriods, contains, dateOf, daysInMonth, fullMonth, isMonth, monthOf, shiftMonth } from "./periods";
 
 describe("períodos", () => {
   it("usa o mês de Brasília", () => {
     expect(monthOf(new Date("2026-12-01T02:30:00Z"))).toBe("2026-11");
     expect(monthOf(new Date("2026-12-01T03:00:00Z"))).toBe("2026-12");
+  });
+
+  it("usa o dia de Brasília", () => {
+    expect(dateOf(new Date("2026-12-01T02:30:00Z"))).toBe("2026-11-30");
   });
 
   it("desloca meses atravessando o ano", () => {

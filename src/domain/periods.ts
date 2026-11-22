@@ -15,6 +15,11 @@ function brasiliaParts(date: Date) {
   return { year: local.getUTCFullYear(), month: local.getUTCMonth() + 1, day: local.getUTCDate() };
 }
 
+export function dateOf(date: Date) {
+  const { year, month, day } = brasiliaParts(date);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 export function monthOf(date: Date) {
   const { year, month } = brasiliaParts(date);
   return `${year}-${String(month).padStart(2, "0")}`;

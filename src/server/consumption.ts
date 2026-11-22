@@ -46,12 +46,14 @@ export async function loadConsumptionRecords(householdId: string, range?: Period
         accountName: financialAccounts.name,
         institutionName: integrationConnections.institutionName,
         memberName: householdMembers.displayName,
+        billDueDate: creditCardBills.dueDate,
       })
       .from(transactions)
       .innerJoin(financialAccounts, eq(financialAccounts.id, transactions.accountId))
       .innerJoin(integrationConnections, eq(integrationConnections.id, financialAccounts.connectionId))
       .innerJoin(householdMembers, eq(householdMembers.id, integrationConnections.memberId))
       .leftJoin(categories, eq(categories.id, transactions.categoryId))
+      .leftJoin(creditCardBills, eq(creditCardBills.id, transactions.billId))
       .where(
         and(
           eq(householdMembers.householdId, householdId),

@@ -10,6 +10,7 @@ export type ConsumptionRecord = BillLine & {
   accountName: string;
   institutionName: string | null;
   memberName: string;
+  billDueDate: string | null;
 };
 
 export type ConsumptionNature = "spending" | "refund" | "income" | "transfer" | "bill_payment";
