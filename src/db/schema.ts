@@ -30,6 +30,8 @@ export const pluggyCredentials = pgTable("pluggy_credentials", {
     .references(() => householdMembers.id, { onDelete: "cascade" }),
   clientId: text("client_id").notNull(),
   clientSecretEncrypted: text("client_secret_encrypted").notNull(),
+  webhookId: text("webhook_id"),
+  webhookRegisteredAt: timestamp("webhook_registered_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();
@@ -193,5 +195,28 @@ export const syncRuns = pgTable(
     uniqueIndex("sync_runs_one_running_per_connection_idx")
       .on(table.connectionId)
       .where(sql`${table.status} = 'running'`),
+  ],
+).enableRLS();
+
+export const webhookEventResults = ["synced", "revoked", "ignored", "failed"] as const;
+
+export const webhookEvents = pgTable(
+  "webhook_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: text("provider").notNull().default("pluggy"),
+    externalEventId: text("external_event_id").notNull(),
+    event: text("event").notNull(),
+    externalItemId: text("external_item_id"),
+    connectionId: uuid("connection_id").references(() => integrationConnections.id, { onDelete: "set null" }),
+    triggeredBy: text("triggered_by"),
+    result: text("result", { enum: webhookEventResults }),
+    detail: text("detail"),
+    receivedAt: timestamp("received_at", { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("webhook_events_provider_event_idx").on(table.provider, table.externalEventId),
+    index("webhook_events_connection_idx").on(table.connectionId, table.receivedAt),
   ],
 ).enableRLS();
