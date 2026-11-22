@@ -183,6 +183,56 @@ Na sincronização, a regra da residência vem antes das regras automáticas. As
 
 A sincronização categoriza só as transações ainda não avaliadas, então mudar uma regra não reescreve o histórico. Uma transação categorizada automaticamente volta a ser avaliada apenas se a descrição ou a categoria da fonte mudar. Classificações feitas pelo usuário nunca são alteradas pela sincronização. A tela Contas mostra a porcentagem das compras de cada cartão que têm categoria.
 
+## Indicadores e análise
+
+### Definições
+
+Todas as telas usam as mesmas definições, em `src/domain/consumption.ts`:
+
+- **Consumo**: compras no cartão e saídas da conta, menos estornos e créditos do cartão.
+- **Fora do consumo**: entradas, transferências entre integrantes ou entre contas próprias e pagamentos de fatura.
+- **Pagamentos de fatura**: o mesmo pagamento aparece saindo da conta e chegando no cartão. Os dois lados são contados separados ("faturas pagas, recebido nos cartões" e "pagamentos feitos pelas contas") e nunca somados.
+- **Data de referência**: dia da compra ou do lançamento, no horário de Brasília. A tela da fatura usa o ciclo de cobrança, por isso os totais por mês e por fatura podem diferir.
+- **Períodos comparáveis**: o mês em andamento é comparado com o mesmo intervalo de dias do mês comparado (ex.: 01/11 a 22/11 contra 01/10 a 22/10). Meses encerrados são comparados inteiros.
+- **Ticket médio**: valor das compras dividido pela quantidade, sem descontar estornos.
+- **Variação**: diferença sobre o período comparado, sem cálculo quando o período comparado é zero.
+- **Integrante**: titular da conta ou do cartão em que a compra foi feita, que não é necessariamente quem consumiu.
+
+### Telas
+
+- **Início**: visão do dia a dia, com o consumo do mês comparado ao mesmo período do mês anterior, entradas, saldo em contas, faturas abertas com o limite usado e as maiores categorias com a variação. Mostra o período e a última sincronização.
+- **Análise detalhada** (`/analise?mes=AAAA-MM&comparar=AAAA-MM`): comparação entre dois períodos com os indicadores, consumo por categoria (cada categoria abre as movimentações), por integrante, por origem e por estabelecimento, a qualidade dos dados (histórico disponível, consumo sem categoria, compras pendentes, última sincronização), as definições e a exportação.
+
+### Exportação
+
+`GET /api/exportacao?mes=AAAA-MM&formato=csv|excel` devolve um CSV com uma linha por transação da residência, em ordem cronológica. Sem `mes`, exporta o histórico completo. O formato `csv` usa vírgula e ponto decimal; o formato `excel` usa ponto e vírgula e vírgula decimal, para o Excel em português. O arquivo é UTF-8 com BOM, e textos que começam com `=`, `+`, `-` ou `@` são protegidos contra execução de fórmulas.
+
+| Coluna | Descrição |
+|---|---|
+| `id` | Identificador interno da transação |
+| `data` | Data da compra ou do lançamento, no horário de Brasília (`AAAA-MM-DD`) |
+| `mes` | Mês da data (`AAAA-MM`) |
+| `data_hora_utc` | Data e hora em UTC (ISO 8601) |
+| `valor` | Valor absoluto, em reais |
+| `consumo` | Contribuição para o consumo: positivo para compras, negativo para estornos, zero para o resto |
+| `natureza` | `consumo`, `estorno`, `entrada`, `transferencia` ou `pagamento_fatura` |
+| `direcao` | `saida` ou `entrada` |
+| `situacao` | `lancada` ou `pendente` (pendentes podem mudar ou sumir na fonte) |
+| `descricao_original` | Descrição como veio do banco |
+| `estabelecimento` | Estabelecimento normalizado |
+| `categoria` | Categoria no Kalu, vazia quando sem categoria |
+| `tipo_categoria` | `consumo` ou `transferencia` |
+| `origem_categoria` | `automatica`, `regra` (regra da residência) ou `usuario` (ajuste manual) |
+| `categoria_fonte` | Categoria informada pela Pluggy |
+| `conta` | Nome da conta ou do cartão |
+| `tipo_conta` | `conta_corrente`, `poupanca`, `cartao_credito` ou `outra` |
+| `instituicao` | Banco |
+| `integrante` | Titular da conta ou do cartão |
+| `fatura_vencimento` | Vencimento da fatura em que a compra foi cobrada (cartão) |
+| `parcela`, `total_parcelas` | Número da parcela e quantidade de parcelas |
+
+Para somar o consumo de um período, some a coluna `consumo`. Para não contar o pagamento de fatura duas vezes, filtre `natureza = pagamento_fatura` por `tipo_conta`.
+
 ## Testes
 
 ```bash

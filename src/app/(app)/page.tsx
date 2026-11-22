@@ -1,27 +1,24 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { ArrowRight, ListChecks, Plug } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, CreditCard, Landmark, PieChart, Plug } from "lucide-react";
+import { AuthorizationNotice } from "@/components/authorization-notice";
+import { Change } from "@/components/change";
+import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/panel";
-import { AuthorizationNotice } from "@/components/authorization-notice";
+import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { authorizationAlert } from "@/domain/authorization";
+import { fromCents } from "@/domain/money";
+import { formatDateTime, formatMonth, formatPeriod } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
+import { listHouseholdCardBills } from "@/server/bills";
 import { listConnections } from "@/server/connections";
-
-const proximasEtapas = [
-  "Sincronização de contas, cartões e faturas",
-  "Fatura do cartão por categoria",
-  "Correção de categorias e participantes",
-];
-
-const monthFormat = new Intl.DateTimeFormat("pt-BR", {
-  month: "long",
-  year: "numeric",
-  timeZone: "America/Sao_Paulo",
-});
+import { getConsumptionComparison } from "@/server/consumption";
 
 const namesFormat = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
+const TOP_CATEGORIES = 5;
 
 function capitalize(text: string) {
   return text.charAt(0).toUpperCase() + text.slice(1);
@@ -34,24 +31,40 @@ async function HomeContent() {
     return <PageHeader title="Kalu" description="Sua conta ainda não está vinculada a uma residência." />;
   }
 
-  const [members, connections] = await Promise.all([
+  const now = new Date();
+  const [members, connections, comparison, cardBills] = await Promise.all([
     listHouseholdMembers(member.householdId),
     listConnections(member.memberId),
+    getConsumptionComparison(member.householdId, undefined, undefined, now),
+    listHouseholdCardBills(member.householdId),
   ]);
 
-  const banks = connections.map((connection) => connection.institutionName ?? "Instituição");
-  const now = new Date();
   const alerts = connections.flatMap((connection) => {
     const alert = authorizationAlert(connection, now);
     return alert ? [{ id: connection.id, institution: connection.institutionName ?? "Instituição", alert }] : [];
   });
+  const { current, previous, periods, coverage } = comparison;
+  const hasData = coverage.transactionsCount > 0;
+  const deltaCents = current.consumptionCents - previous.consumptionCents;
+  const openBillsCents = [...cardBills.values()].reduce((total, bills) => total + bills.open.netCents, 0);
+  const topCategories = current.byCategory.slice(0, TOP_CATEGORIES);
+  const previousByCategory = new Map(previous.byCategory.map((entry) => [entry.key, entry.totalCents]));
+  const banks = connections.map((connection) => connection.institutionName ?? "Instituição");
 
   return (
     <>
-      <PageHeader
-        title={capitalize(monthFormat.format(new Date()))}
-        description={`${member.householdName} · ${namesFormat.format(members.map((m) => m.displayName))}`}
-      />
+      <div className="flex flex-col gap-2">
+        <PageHeader
+          title={capitalize(formatMonth(comparison.month))}
+          description={`${member.householdName} · ${namesFormat.format(members.map((m) => m.displayName))}`}
+        />
+        {hasData && (
+          <p className="text-sm text-muted-foreground">
+            Valores de {formatPeriod(periods.current)}
+            {coverage.lastSyncedAt && `, com dados atualizados em ${formatDateTime(coverage.lastSyncedAt)}`}.
+          </p>
+        )}
+      </div>
 
       {alerts.length > 0 && (
         <div className="flex flex-col gap-3">
@@ -61,32 +74,116 @@ async function HomeContent() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel title="Suas conexões" icon={Plug}>
-          <p className="text-muted-foreground">
-            {banks.length === 0
-              ? "Nenhum banco conectado ainda. Conecte seus bancos para o Kalu montar suas faturas e gastos."
-              : `${banks.length === 1 ? "1 banco conectado" : `${banks.length} bancos conectados`}: ${namesFormat.format(banks)}.`}
-          </p>
-          <Button asChild className="mt-5">
-            <Link href="/conexoes">
-              {banks.length === 0 ? "Conectar bancos" : "Gerenciar conexões"}
-              <ArrowRight />
-            </Link>
-          </Button>
-        </Panel>
+      {hasData ? (
+        <>
+          <section className="rounded-2xl border bg-card p-6 text-card-foreground sm:p-8">
+            <h2 className="text-sm text-muted-foreground">Vocês gastaram neste mês</h2>
+            <Money
+              value={fromCents(current.consumptionCents)}
+              className="mt-2 block font-display text-4xl font-bold text-primary sm:text-5xl"
+            />
+            <p className="mt-3 text-sm text-muted-foreground">
+              {current.purchasesCount === 1 ? "1 compra" : `${current.purchasesCount} compras`}
+              {previous.consumptionCents > 0 && (
+                <>
+                  {" · "}
+                  <span className={cn("font-medium", deltaCents > 0 ? "text-warning" : "text-success")}>
+                    <Money value={fromCents(Math.abs(deltaCents))} /> {deltaCents > 0 ? "a mais" : "a menos"}
+                  </span>{" "}
+                  que no mesmo período de {formatMonth(comparison.compareTo).split(" ")[0]} ({formatPeriod(periods.previous)})
+                </>
+              )}
+            </p>
+            <p className="mt-4 text-xs text-muted-foreground">
+              Compras no cartão e na conta, menos estornos. Transferências entre vocês e pagamentos de fatura não contam.
+            </p>
+          </section>
 
-        <Panel title="Próximas etapas" icon={ListChecks}>
-          <ul className="flex flex-col gap-3 text-muted-foreground">
-            {proximasEtapas.map((etapa) => (
-              <li key={etapa} className="flex items-center gap-3">
-                <span className="size-1.5 shrink-0 rounded-full bg-primary" />
-                {etapa}
-              </li>
-            ))}
-          </ul>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard
+              label="Entradas no mês"
+              icon={ArrowDownLeft}
+              value={fromCents(current.incomeCents)}
+              valueClassName="text-success"
+              note="Salários e outros recebimentos"
+            />
+            <StatCard label="Saldo em contas" icon={Landmark} value={fromCents(coverage.balanceCents)} note="Contas correntes e poupança" />
+            <StatCard
+              label="Faturas abertas"
+              icon={CreditCard}
+              value={fromCents(openBillsCents)}
+              note={
+                <>
+                  Limite usado <Money value={fromCents(coverage.creditUsedCents)} /> de{" "}
+                  <Money value={fromCents(coverage.creditLimitCents)} />
+                </>
+              }
+            />
+          </div>
+
+          <Panel title="Onde foi o dinheiro" icon={PieChart}>
+            {topCategories.length === 0 ? (
+              <p className="text-muted-foreground">Nenhuma compra neste mês ainda.</p>
+            ) : (
+              <ul className="flex flex-col gap-4">
+                {topCategories.map((category) => {
+                  const share = current.consumptionCents > 0 ? (category.totalCents / current.consumptionCents) * 100 : 0;
+                  return (
+                    <li key={category.key} className="flex flex-col gap-2">
+                      <span className="flex items-center justify-between gap-4">
+                        <span className="min-w-0 truncate font-medium">{category.label}</span>
+                        <span className="flex shrink-0 items-baseline gap-3">
+                          <Change
+                            current={category.totalCents}
+                            previous={previousByCategory.get(category.key) ?? 0}
+                            className="text-xs"
+                          />
+                          <Money value={fromCents(category.totalCents)} className="font-semibold" />
+                        </span>
+                      </span>
+                      <span className="h-1.5 overflow-hidden rounded-full bg-secondary" role="presentation">
+                        <span
+                          className="block h-full rounded-full bg-primary"
+                          style={{ width: `${Math.max(0, Math.round(share))}%` }}
+                        />
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            <p className="mt-5 text-xs text-muted-foreground">
+              Setas comparam com o mesmo período de {formatMonth(comparison.compareTo)}.
+            </p>
+            <Button asChild variant="outline" className="mt-5">
+              <Link href="/analise">
+                Ver análise detalhada
+                <ArrowRight />
+              </Link>
+            </Button>
+          </Panel>
+        </>
+      ) : (
+        <Panel title="Seus gastos" icon={PieChart}>
+          <p className="text-muted-foreground">
+            Assim que os bancos forem conectados e sincronizados, os gastos do mês aparecem aqui.
+          </p>
         </Panel>
-      </div>
+      )}
+
+      <Panel title="Suas conexões" icon={Plug}>
+        <p className="text-muted-foreground">
+          {banks.length === 0
+            ? "Nenhum banco conectado ainda. Conecte seus bancos para o Kalu montar suas faturas e gastos."
+            : `${banks.length === 1 ? "1 banco conectado" : `${banks.length} bancos conectados`}: ${namesFormat.format(banks)}.`}
+        </p>
+        <Button asChild variant={banks.length === 0 ? "default" : "outline"} className="mt-5">
+          <Link href="/conexoes">
+            {banks.length === 0 ? "Conectar bancos" : "Gerenciar conexões"}
+            <ArrowRight />
+          </Link>
+        </Button>
+      </Panel>
     </>
   );
 }
