@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { formatBRL, formatDate, formatDateTime, formatIsoDate, formatMonth, formatTransactionChanges } from "./format";
+import {
+  formatBRL,
+  formatDate,
+  formatDateTime,
+  formatIsoDate,
+  formatMonth,
+  formatPercent,
+  formatPeriod,
+  formatTransactionChanges,
+} from "./format";
 
 const semEspacoEspecial = (texto: string) => texto.replace(/\s/g, " ");
 
@@ -48,5 +57,22 @@ describe("formatMonth", () => {
     ["2026-01", "janeiro de 2026"],
   ])("%s → %s", (month, expected) => {
     expect(formatMonth(month)).toBe(expected);
+  });
+});
+
+describe("formatPeriod", () => {
+  it("mostra o primeiro e o último dia do período, com o fim exclusivo", () => {
+    expect(
+      formatPeriod({ start: new Date("2026-11-01T00:00:00-03:00"), end: new Date("2026-12-01T00:00:00-03:00") }),
+    ).toBe("01/11 a 30/11");
+  });
+});
+
+describe("formatPercent", () => {
+  it.each([
+    [20, "20%"],
+    [-12.345, "-12,3%"],
+  ])("%d → %s", (value, expected) => {
+    expect(formatPercent(value)).toBe(expected);
   });
 });

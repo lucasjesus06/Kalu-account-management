@@ -47,3 +47,15 @@ export function formatMonth(isoMonth: string) {
   const [year, month] = isoMonth.split("-").map(Number);
   return monthFormatter.format(new Date(Date.UTC(year, month - 1, 15)));
 }
+
+const shortDateFormat = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" });
+
+export function formatPeriod(period: { start: Date; end: Date }) {
+  return `${shortDateFormat.format(period.start)} a ${shortDateFormat.format(new Date(period.end.getTime() - 1))}`;
+}
+
+const percentFormat = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 });
+
+export function formatPercent(value: number) {
+  return `${percentFormat.format(value)}%`;
+}
