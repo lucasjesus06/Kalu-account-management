@@ -11,11 +11,13 @@ import {
   sameTarget,
   type BudgetGoal,
 } from "@/domain/budget";
+import { goalSummary } from "@/domain/change-log";
 import { parseExpenseChoice } from "@/domain/expense-nature";
 import { fromCents } from "@/domain/money";
 import { fullMonth, monthOf, shiftMonth } from "@/domain/periods";
 import { formatBRL } from "@/lib/format";
 import { UUID_PATTERN, type ActionResult } from "./connections";
+import { recordChange } from "./change-log";
 import { loadConsumptionRecords } from "./consumption";
 import { expenseMembers } from "./expense-nature";
 
@@ -175,9 +177,25 @@ export async function saveGoal(member: Member, input: GoalInput, now: Date): Pro
     memberName: members.find((m) => m.id === target.memberId)?.displayName ?? null,
   });
   const amount = formatBRL(fromCents(limitCents));
+  const logChange = (
+    executor: Parameters<typeof recordChange>[0],
+    kind: "goal_created" | "goal_updated",
+    previousValue: string | null,
+  ) =>
+    recordChange(executor, {
+      householdId: member.householdId,
+      memberId: member.memberId,
+      kind,
+      subject: label,
+      previousValue,
+      newValue: `${label}: ${goalSummary(limitCents, thresholds)}`,
+    });
 
   if (!input.goalId) {
-    await db.insert(budgetGoals).values({ householdId: member.householdId, startsMonth: month, ...values });
+    await db.transaction(async (tx) => {
+      await tx.insert(budgetGoals).values({ householdId: member.householdId, startsMonth: month, ...values });
+      await logChange(tx, "goal_created", null);
+    });
     await evaluateBudgetAlerts(member.householdId, now);
     return { ok: true, message: `Meta de ${label} criada: ${amount} por mês.` };
   }
@@ -186,20 +204,22 @@ export async function saveGoal(member: Member, input: GoalInput, now: Date): Pro
   if (!UUID_PATTERN.test(input.goalId) || !existing) {
     return { ok: false, error: "Meta não encontrada." };
   }
-  if (existing.startsMonth === month) {
-    await db
-      .update(budgetGoals)
-      .set({ ...values, updatedAt: now })
-      .where(eq(budgetGoals.id, existing.id));
-  } else {
-    await db.transaction(async (tx) => {
+  const previousValue = `${goalLabel(existing)}: ${goalSummary(existing.limitCents, existing.thresholds)}`;
+  await db.transaction(async (tx) => {
+    if (existing.startsMonth === month) {
+      await tx
+        .update(budgetGoals)
+        .set({ ...values, updatedAt: now })
+        .where(eq(budgetGoals.id, existing.id));
+    } else {
       await tx
         .update(budgetGoals)
         .set({ endsMonth: shiftMonth(month, -1), updatedAt: now })
         .where(eq(budgetGoals.id, existing.id));
       await tx.insert(budgetGoals).values({ householdId: member.householdId, startsMonth: month, ...values });
-    });
-  }
+    }
+    await logChange(tx, "goal_updated", previousValue);
+  });
   await evaluateBudgetAlerts(member.householdId, now);
   return {
     ok: true,
@@ -220,13 +240,27 @@ export async function removeGoal(member: Member, goalId: string, now: Date): Pro
     return { ok: false, error: "Meta não encontrada." };
   }
   const db = getDb();
+  const removed = {
+    householdId: member.householdId,
+    memberId: member.memberId,
+    kind: "goal_removed" as const,
+    subject: goalLabel(goal),
+    previousValue: `${goalLabel(goal)}: ${goalSummary(goal.limitCents, goal.thresholds)}`,
+    newValue: null,
+  };
   if (goal.startsMonth === month) {
-    await db.delete(budgetGoals).where(eq(budgetGoals.id, goal.id));
+    await db.transaction(async (tx) => {
+      await tx.delete(budgetGoals).where(eq(budgetGoals.id, goal.id));
+      await recordChange(tx, removed);
+    });
     return { ok: true, message: "Meta removida." };
   }
-  await db
-    .update(budgetGoals)
-    .set({ endsMonth: shiftMonth(month, -1), updatedAt: now })
-    .where(eq(budgetGoals.id, goal.id));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(budgetGoals)
+      .set({ endsMonth: shiftMonth(month, -1), updatedAt: now })
+      .where(eq(budgetGoals.id, goal.id));
+    await recordChange(tx, removed);
+  });
   return { ok: true, message: "Meta encerrada. Ela continua aparecendo nos meses em que valeu." };
 }
