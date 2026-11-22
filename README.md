@@ -125,6 +125,17 @@ No plano Hobby a Vercel executa o agendamento uma vez por dia, em algum momento 
 curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/sync
 ```
 
+### Avisos de meta no celular (push)
+
+Quando uma meta cruza uma faixa, o Kalu manda uma notificação para os aparelhos ativos da casa, além de mostrar o aviso em `/metas`.
+
+- **Ativar**: em **Metas**, painel **Avisos**, **Ativar avisos neste aparelho**. Cada pessoa ativa em cada aparelho; **Desativar** remove só o aparelho atual. No iPhone (iOS 16.4 ou mais novo) o Kalu precisa estar instalado na tela inicial.
+- **Chaves**: gere o par VAPID uma vez com `npx web-push generate-vapid-keys` e configure `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` (por exemplo `mailto:voce@exemplo.com`) na Vercel. Sem as três, o botão não aparece e nada é enviado. Troque o par e todos precisam ativar de novo.
+- **Quando envia**: após cada sincronização, ao reclassificar uma transação e ao salvar uma meta. Se várias faixas da mesma meta forem cruzadas de uma vez, vai uma única notificação, a da maior faixa.
+- **Sem repetição**: cada aviso guarda `notified_at` e é reservado antes do envio, então duas execuções ao mesmo tempo não mandam duas vezes. Avisos com mais de 48 horas são marcados como enviados sem notificar, para a configuração tardia das chaves não despejar histórico.
+- **Aparelhos expirados**: quando o serviço de push responde 404 ou 410, a inscrição é apagada sozinha.
+- A falha no envio nunca derruba a sincronização nem o salvamento: o aviso continua na tela.
+
 ### Notificações da Pluggy (webhooks)
 
 Com as notificações ativas, o Kalu sincroniza assim que a Pluggy avisa que algo mudou, sem esperar o agendamento diário (que continua como garantia).
@@ -328,6 +339,7 @@ Os testes de integração rodam contra um PostgreSQL em memória ([PGlite](https
 | `APP_URL` | Endereço público do Kalu, usado no cadastro do webhook. Na Vercel, se vazio, usa o domínio de produção |
 | `PLUGGY_WEBHOOK_SECRET` | Segredo que a Pluggy envia em cada notificação |
 | `PLUGGY_WEBHOOK_SIGNING_SECRET` | Opcional: segredo de assinatura gerado no Dashboard da Pluggy |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Chaves das notificações push dos avisos de meta (veja Avisos de meta no celular). Opcionais: sem elas, não há push |
 | `CRON_SECRET` | Protege a rota da sincronização diária. Gere com `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` e configure na Vercel |
 | `PLUGGY_API_URL` | Opcional. Endereço da API da Pluggy; vazio usa `https://api.pluggy.ai`. Serve para apontar para um servidor simulado em testes |
 
