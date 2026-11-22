@@ -86,11 +86,20 @@ Cada integrante cadastra as próprias credenciais da Pluggy e os próprios banco
 node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
 
-2. No [Meu Pluggy](https://meu.pluggy.ai), conecte os bancos. No [Dashboard da Pluggy](https://dashboard.pluggy.ai), com o mesmo e-mail, conecte o **MeuPluggy** à aplicação.
-3. Na tela **Conexões** do Kalu, informe o **Client ID** e o **Client Secret** da aplicação. Eles são validados na Pluggy antes de serem salvos, e o secret fica criptografado (AES-256-GCM) no banco.
-4. Adicione o **Item ID** de cada banco, copiado de **Connected Items** no Dashboard.
+2. No [Meu Pluggy](https://meu.pluggy.ai), conecte os bancos.
+3. Na tela **Conexões** do Kalu, informe o **Client ID** e o **Client Secret** da aplicação, do [Dashboard da Pluggy](https://dashboard.pluggy.ai). Eles são validados na Pluggy antes de serem salvos, e o secret fica criptografado (AES-256-GCM) no banco.
+4. Clique em **Conectar banco**. O Kalu cria um token de conexão temporário no servidor (o secret nunca vai para o navegador) e abre a janela da Pluggy (Pluggy Connect). Escolha **MeuPluggy** e autorize. A conexão é registrada e a primeira sincronização roda em seguida.
+5. As contas, faturas e transações aparecem na tela **Contas**.
 
-5. Clique em **Sincronizar agora** em cada banco. As contas, faturas e transações aparecem na tela **Contas**.
+Ainda é possível adicionar um banco pelo **Item ID** (em **Adicionar pelo Item ID**), copiado de **Connected Items** no Dashboard.
+
+### Renovação da autorização
+
+A autorização do Meu Pluggy vale um ano e só pode ser renovada por quem entra no Meu Pluggy; a sincronização automática não consegue renová-la. Quando a autorização está perto de vencer, expirou ou a conexão está com erro, a conexão mostra **Renovar autorização**: a janela da Pluggy abre já vinculada ao item (`updateItem`), e depois de autorizar a conexão volta para **Ativa**, com a nova validade, e é sincronizada. Se a Pluggy devolver outro item na renovação, a mesma conexão do Kalu passa a apontar para ele.
+
+Os avisos de vencimento no Início levam para a tela **Conexões**.
+
+`NEXT_PUBLIC_PLUGGY_CONNECT_URL` é opcional e só serve para apontar o widget para um ambiente de testes; sem ela, é usado o endereço oficial da Pluggy.
 
 A `ENCRYPTION_KEY` não pode ser trocada sem cadastrar as credenciais de novo: os secrets salvos só podem ser lidos com a chave que os criptografou.
 
