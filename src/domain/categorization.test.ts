@@ -36,6 +36,24 @@ describe("categorização automática", () => {
     expect(byDescription(description)).toBe(slug);
   });
 
+  it.each([
+    ["Same person transfer"],
+    ["Same person transfer - PIX"],
+    ["Same person transfer - TED"],
+  ])("trata %s da fonte como transferência entre contas próprias", (providerCategory) => {
+    expect(categorize({ description: "PIX ENVIADO LUCAS", providerCategory })).toEqual({
+      slug: "transferencia-entre-contas-proprias",
+      matchedBy: "provider",
+    });
+  });
+
+  it.each(["PIX ENVIADO MESMA TITULARIDADE", "TRANSF ENTRE CONTAS", "TRANSFERENCIA ENTRE CONTAS"])(
+    "reconhece transferência entre contas próprias pela descrição: %s",
+    (description) => {
+      expect(byDescription(description)).toBe("transferencia-entre-contas-proprias");
+    },
+  );
+
   it("usa a categoria da fonte quando nenhum estabelecimento conhecido corresponde", () => {
     expect(categorize({ description: "LOJA TESTE", providerCategory: "Shopping" })).toEqual({
       slug: "compras",

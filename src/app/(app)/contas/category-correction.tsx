@@ -3,14 +3,19 @@
 import { createContext, useActionState, useContext, useRef, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { FormFeedback } from "../../conexoes/form-feedback";
-import type { FormState } from "../../conexoes/actions";
+import { FormFeedback } from "../conexoes/form-feedback";
+import type { FormState } from "../conexoes/actions";
 import { correctCategoryAction } from "./actions";
 
 type Target = { transactionId: string; merchant: string; categorySlug: string | null };
-type Category = { id: string; slug: string; name: string };
+type Category = { id: string; slug: string; name: string; kind: "expense" | "transfer" };
 
 const CorrectionContext = createContext<(target: Target) => void>(() => {});
+
+const groups = [
+  { kind: "expense", label: "Consumo" },
+  { kind: "transfer", label: "Transferências (não entram no consumo)" },
+] as const;
 
 const scopes = [
   { value: "transaction", label: "Somente nesta transação" },
@@ -39,10 +44,16 @@ function CorrectionForm({ target, categories, onClose }: { target: Target; categ
           className="h-9 rounded-md border border-input bg-input/30 px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
         >
           <option value="">Sem categoria</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.id}>
-              {category.name}
-            </option>
+          {groups.map((group) => (
+            <optgroup key={group.kind} label={group.label}>
+              {categories
+                .filter((category) => category.kind === group.kind)
+                .map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.name}
+                  </option>
+                ))}
+            </optgroup>
           ))}
         </select>
       </div>

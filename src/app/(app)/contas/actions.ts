@@ -3,7 +3,7 @@
 import { refresh } from "next/cache";
 import { getCurrentMember } from "@/server/auth";
 import { correctCategory, correctionScopes, type CorrectionScope } from "@/server/categorization";
-import type { FormState } from "../../conexoes/actions";
+import type { FormState } from "../conexoes/actions";
 
 function field(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();

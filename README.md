@@ -158,6 +158,19 @@ A categorização automática é determinística, sem inteligência artificial:
 2. Na falta deles, a categoria informada pela Pluggy, traduzida para as categorias do Kalu.
 3. Sem nenhuma das duas, a transação fica sem categoria. Pagamentos de fatura, transferências e receitas ficam sem categoria de propósito.
 
+### Transferências
+
+As categorias têm um tipo: **consumo** (`expense`) ou **transferência** (`transfer`). Há duas classificações de transferência:
+
+- **Transferência entre integrantes**: por exemplo, um PIX feito com o cartão de crédito para o outro integrante, ou um PIX entre as contas de vocês.
+- **Transferência entre contas próprias**: reconhecida automaticamente quando a Pluggy indica transferência para o mesmo titular ou quando a descrição diz "mesma titularidade" ou "transferência entre contas".
+
+Transferências não entram no consumo: na tela da fatura aparecem numa seção própria e ficam fora dos maiores estabelecimentos; no extrato, ficam fora dos gastos. Para que um PIX no crédito recorrente para o outro integrante seja sempre tratado como transferência, use a correção com a opção que cria a regra do estabelecimento.
+
+### Extrato da conta
+
+Em **Contas**, cada conta corrente ou poupança tem o atalho **Ver extrato**, que abre `/contas/extrato?conta=<id>&mes=AAAA-MM`. O extrato mostra as movimentações do mês (pelo horário de Brasília) e um resumo com entradas, gastos, transferências enviadas e recebidas e pagamentos de fatura. Pagamentos de fatura do cartão não entram nos gastos, porque as compras já são contadas na fatura. Cada movimentação tem o botão **Alterar**, com a mesma correção da tela da fatura.
+
 ### Correção de categoria
 
 Na tela da fatura, cada transação tem o botão **Alterar**, que abre a correção com três opções:

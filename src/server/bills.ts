@@ -145,15 +145,16 @@ export async function getCardBillDetail(householdId: string, accountId: string, 
         categorySource: transactions.categorySource,
         categorySlug: categories.slug,
         categoryName: categories.name,
+        categoryKind: categories.kind,
       })
       .from(transactions)
       .leftJoin(categories, eq(categories.id, transactions.categoryId))
       .where(eq(transactions.accountId, accountId)),
   ]);
 
-  const lines: BillLine[] = rows.map(({ categorySlug, categoryName, ...row }) => ({
+  const lines: BillLine[] = rows.map(({ categorySlug, categoryName, categoryKind, ...row }) => ({
     ...row,
-    category: categorySlug && categoryName ? { slug: categorySlug, name: categoryName } : null,
+    category: categorySlug && categoryName && categoryKind ? { slug: categorySlug, name: categoryName, kind: categoryKind } : null,
   }));
   const billTotals = bills.map((bill) => bill.totalCents);
   const open = composeOpenBill(lines, bills);

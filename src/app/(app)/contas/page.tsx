@@ -115,6 +115,12 @@ async function AccountsContent() {
                 <div className="flex flex-col gap-2">
                   <span className="text-sm text-muted-foreground">Saldo</span>
                   <Money value={fromCents(account.balanceCents)} className="font-display text-2xl font-bold" />
+                  <Button asChild variant="outline" size="sm" className="mt-2 self-start">
+                    <Link href={`/contas/extrato?conta=${account.id}`}>
+                      Ver extrato
+                      <ArrowRight />
+                    </Link>
+                  </Button>
                 </div>
               )}
 

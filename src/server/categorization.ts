@@ -16,7 +16,7 @@ export type CorrectionScope = (typeof correctionScopes)[number];
 
 export async function listCategories() {
   return getDb()
-    .select({ id: categories.id, slug: categories.slug, name: categories.name })
+    .select({ id: categories.id, slug: categories.slug, name: categories.name, kind: categories.kind })
     .from(categories)
     .orderBy(asc(categories.sortOrder));
 }
@@ -119,6 +119,6 @@ export async function correctCategory(
   }
   return {
     ok: true,
-    message: `Categoria alterada para ${categoryLabel} em ${merchant}, incluindo ${updatedHistory} ${updatedHistory === 1 ? "transação anterior" : "transações anteriores"}. Ajustes feitos só numa transação foram mantidos.`,
+    message: `Categoria alterada para ${categoryLabel} em ${merchant}, incluindo ${updatedHistory === 0 ? "nenhuma transação anterior" : updatedHistory === 1 ? "1 transação anterior" : `${updatedHistory} transações anteriores`}. Ajustes feitos só numa transação foram mantidos.`,
   };
 }

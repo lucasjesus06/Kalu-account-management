@@ -85,7 +85,7 @@ describe("correção de categoria", () => {
   it("lista as categorias na ordem do catálogo", async () => {
     const list = await listCategories();
     expect(list[0].name).toBe("Moradia");
-    expect(list).toHaveLength(25);
+    expect(list).toHaveLength(27);
   });
 
   it("somente nesta transação: marca como escolha do usuário e não cria regra", async () => {
@@ -131,6 +131,16 @@ describe("correção de categoria", () => {
     expect(await row(ids.excecao)).toEqual({ category: "restaurantes", source: "user" });
     expect(await row(ids.outroEstabelecimento)).toEqual({ category: "outros", source: "automatic" });
     expect(await row(ids.outraResidencia)).toEqual({ category: "outros", source: "automatic" });
+  });
+
+  it("informa quando não havia transações anteriores para atualizar", async () => {
+    const result = await correctCategory(lucas, ids.outroEstabelecimento, category.supermercado, "merchant_history");
+
+    expect(result).toEqual({
+      ok: true,
+      message:
+        "Categoria alterada para Supermercado em LOJA, incluindo nenhuma transação anterior. Ajustes feitos só numa transação foram mantidos.",
+    });
   });
 
   it("atualiza a regra existente do estabelecimento em vez de duplicar", async () => {
