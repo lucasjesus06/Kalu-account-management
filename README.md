@@ -233,6 +233,18 @@ Todas as telas usam as mesmas definições, em `src/domain/consumption.ts`:
 
 Para somar o consumo de um período, some a coluna `consumo`. Para não contar o pagamento de fatura duas vezes, filtre `natureza = pagamento_fatura` por `tipo_conta`.
 
+## Aplicativo no celular (PWA)
+
+O Kalu pode ser instalado na tela inicial do celular e abre em tela cheia, como um aplicativo, sem loja.
+
+- `src/app/manifest.ts` gera o `/manifest.webmanifest` com nome, cores, modo de tela cheia, ícones (comum e *maskable* para o Android) e atalhos para Contas e Análise. O manifesto e os ícones são públicos, porque o navegador os busca sem a sessão.
+- Ícones em `public/icons/`, `src/app/apple-icon.png` (tela inicial do iPhone) e `src/app/favicon.ico`.
+- No iPhone, o Kalu abre sem a barra do Safari e a detecção automática de telefone fica desligada, para valores não virarem links.
+- No Início, um cartão sugere a instalação: no Android e no Chrome, o botão **Instalar** abre o instalador do sistema; no iPhone, mostra o caminho pelo Safari (Compartilhar → Adicionar à Tela de Início). O cartão some quando o Kalu já está instalado ou depois de dispensado.
+- Não há modo offline: os dados financeiros não são guardados no aparelho.
+
+Para instalar: abra o Kalu publicado (HTTPS) no celular, entre com sua conta e use o cartão do Início ou o menu do navegador.
+
 ## Testes
 
 ```bash
