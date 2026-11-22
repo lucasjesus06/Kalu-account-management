@@ -119,6 +119,6 @@ export async function correctCategory(
   }
   return {
     ok: true,
-    message: `Categoria alterada para ${categoryLabel} em ${merchant}, incluindo ${updatedHistory} ${updatedHistory === 1 ? "transação anterior" : "transações anteriores"}. Ajustes feitos só numa transação foram mantidos.`,
+    message: `Categoria alterada para ${categoryLabel} em ${merchant}, incluindo ${updatedHistory === 0 ? "nenhuma transação anterior" : updatedHistory === 1 ? "1 transação anterior" : `${updatedHistory} transações anteriores`}. Ajustes feitos só numa transação foram mantidos.`,
   };
 }
