@@ -40,3 +40,10 @@ export function formatIsoDate(isoDate: string) {
   const [year, month, day] = isoDate.split("-");
   return `${day}/${month}/${year}`;
 }
+
+const monthFormatter = new Intl.DateTimeFormat("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
+
+export function formatMonth(isoMonth: string) {
+  const [year, month] = isoMonth.split("-").map(Number);
+  return monthFormatter.format(new Date(Date.UTC(year, month - 1, 15)));
+}
