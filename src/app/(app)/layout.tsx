@@ -4,6 +4,7 @@ import { LogOut } from "lucide-react";
 import { BottomNav, TopNav } from "@/components/app-nav";
 import { HideValuesToggle } from "@/components/hide-values-toggle";
 import { MemberAvatars } from "@/components/member-avatars";
+import { ScopeSwitcher } from "@/components/scope-switcher";
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/app/login/actions";
 
@@ -17,6 +18,9 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
           </Link>
           <TopNav />
           <div className="ml-auto flex items-center gap-2">
+            <Suspense fallback={null}>
+              <ScopeSwitcher />
+            </Suspense>
             <HideValuesToggle />
             <Suspense fallback={null}>
               <MemberAvatars />
