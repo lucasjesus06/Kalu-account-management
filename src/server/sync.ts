@@ -26,7 +26,7 @@ import {
   PluggyAuthError,
   PluggyNotFoundError,
 } from "@/integrations/pluggy/client";
-import { evaluateBudgetAlerts } from "./budget";
+import { evaluateAndNotify } from "./budget";
 import { decrypt } from "./crypto";
 import { refreshExpenseNature } from "./expense-nature";
 
@@ -426,7 +426,7 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
       .select({ householdId: householdMembers.householdId })
       .from(householdMembers)
       .where(eq(householdMembers.id, connection.memberId));
-    await evaluateBudgetAlerts(owner.householdId, finishedAt).catch((error) =>
+    await evaluateAndNotify(owner.householdId, finishedAt).catch((error) =>
       console.error("Falha ao avaliar as metas", connection.id, error),
     );
 
