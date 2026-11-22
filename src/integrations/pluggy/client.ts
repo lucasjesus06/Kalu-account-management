@@ -77,11 +77,11 @@ async function get<T>(apiKey: string, url: string, resource: string): Promise<T>
   return (await response.json()) as T;
 }
 
-export async function createConnectToken(apiKey: string, itemId?: string) {
-  const response = await fetch(`${baseUrl()}/connect_token`, {
-    method: "POST",
+async function send<T>(apiKey: string, method: "POST" | "PATCH", path: string, body: unknown, resource: string): Promise<T> {
+  const response = await fetch(`${baseUrl()}${path}`, {
+    method,
     headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
-    body: JSON.stringify({ ...(itemId ? { itemId } : {}), options: { avoidDuplicates: true } }),
+    body: JSON.stringify(body),
     cache: "no-store",
   });
 
@@ -89,17 +89,38 @@ export async function createConnectToken(apiKey: string, itemId?: string) {
     throw new PluggyAuthError("Chave de acesso da Pluggy inválida ou expirada");
   }
   if ([403, 404].includes(response.status)) {
-    throw new PluggyNotFoundError("Item não encontrado para estas credenciais");
+    throw new PluggyNotFoundError(`${resource} não encontrado para estas credenciais`);
   }
   if (!response.ok) {
-    throw new PluggyRequestError(`Falha ao abrir a conexão na Pluggy (HTTP ${response.status})`, response.status);
+    throw new PluggyRequestError(`Falha ao gravar ${resource.toLowerCase()} na Pluggy (HTTP ${response.status})`, response.status);
   }
 
-  const body = (await response.json()) as { accessToken?: unknown };
+  return (await response.json()) as T;
+}
+
+export async function createConnectToken(apiKey: string, itemId?: string) {
+  const body = await send<{ accessToken?: unknown }>(
+    apiKey,
+    "POST",
+    "/connect_token",
+    { ...(itemId ? { itemId } : {}), options: { avoidDuplicates: true } },
+    "Item",
+  );
   if (typeof body.accessToken !== "string" || !body.accessToken) {
-    throw new PluggyRequestError("Resposta da Pluggy sem token de conexão", response.status);
+    throw new PluggyRequestError("Resposta da Pluggy sem token de conexão", 200);
   }
   return body.accessToken;
+}
+
+type PluggyWebhook = { id: string; url: string };
+
+export async function ensureWebhook(apiKey: string, url: string, headers: Record<string, string>) {
+  const { results } = await get<{ results: PluggyWebhook[] }>(apiKey, "/webhooks", "Webhook");
+  const existing = results.find((webhook) => webhook.url === url);
+  const webhook = existing
+    ? await send<PluggyWebhook>(apiKey, "PATCH", `/webhooks/${existing.id}`, { event: "all", headers, enabled: true }, "Webhook")
+    : await send<PluggyWebhook>(apiKey, "POST", "/webhooks", { event: "all", url, headers }, "Webhook");
+  return webhook.id;
 }
 
 export async function getItem(apiKey: string, itemId: string): Promise<PluggyItemSummary> {
