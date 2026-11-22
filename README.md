@@ -33,6 +33,8 @@ A aplicação sobe em [http://localhost:3000](http://localhost:3000).
 | `npm test` | Roda os testes unitários e de integração (Vitest) |
 | `npm run db:generate` | Gera uma nova migration a partir de `src/db/schema.ts` |
 | `npm run db:migrate` | Aplica as migrations pendentes no banco |
+| `npm run db:verificar` | Compara as migrations do repositório com as do banco e lista as que faltam. Com `-- --aplicar`, aplica as faltantes em ordem |
+| `npm run test:alterados` | Roda só os testes afetados pelo que mudou em relação à `main` |
 | `npm run db:studio` | Abre o Drizzle Studio para consultar o banco |
 
 ## Banco de dados
@@ -46,6 +48,8 @@ O banco é um PostgreSQL gerenciado pelo Supabase, acessado com o [Drizzle ORM](
 3. Preencha as duas variáveis no `.env.local`, substituindo `[YOUR-PASSWORD]` pela senha do banco.
 4. Aplique as migrations com `npm run db:migrate`.
 5. Com a aplicação rodando, acesse `/status` para confirmar a conexão.
+
+O `db:migrate` só aplica migrations mais novas que a última registrada no banco, então uma migration pulada no meio fica para trás sem aviso. O `db:verificar` compara uma a uma e acusa o que faltou.
 
 Fluxo para alterar o banco: editar `src/db/schema.ts`, rodar `npm run db:generate -- --name=descricao`, revisar o SQL gerado em `drizzle/` e aplicar com `npm run db:migrate`.
 
