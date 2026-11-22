@@ -1,7 +1,7 @@
 import "server-only";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, max, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { integrationConnections, pluggyCredentials } from "@/db/schema";
+import { integrationConnections, pluggyCredentials, webhookEvents } from "@/db/schema";
 import {
   authenticate,
   createConnectToken,
@@ -19,12 +19,24 @@ export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0
 const PLUGGY_UNAVAILABLE = "Não foi possível falar com a Pluggy agora. Tente novamente em instantes.";
 
 export async function getCredentialsSummary(memberId: string) {
-  const [credentials] = await getDb()
-    .select({ clientId: pluggyCredentials.clientId, updatedAt: pluggyCredentials.updatedAt })
-    .from(pluggyCredentials)
-    .where(eq(pluggyCredentials.memberId, memberId))
-    .limit(1);
-  return credentials ?? null;
+  const db = getDb();
+  const [[credentials], [lastEvent]] = await Promise.all([
+    db
+      .select({
+        clientId: pluggyCredentials.clientId,
+        updatedAt: pluggyCredentials.updatedAt,
+        webhookRegisteredAt: pluggyCredentials.webhookRegisteredAt,
+      })
+      .from(pluggyCredentials)
+      .where(eq(pluggyCredentials.memberId, memberId))
+      .limit(1),
+    db
+      .select({ receivedAt: max(webhookEvents.receivedAt) })
+      .from(webhookEvents)
+      .innerJoin(integrationConnections, eq(integrationConnections.id, webhookEvents.connectionId))
+      .where(eq(integrationConnections.memberId, memberId)),
+  ]);
+  return credentials ? { ...credentials, lastWebhookAt: lastEvent?.receivedAt ?? null } : null;
 }
 
 export async function listConnections(memberId: string) {
@@ -71,13 +83,19 @@ export async function saveCredentials(
     .values({ memberId, clientId, clientSecretEncrypted })
     .onConflictDoUpdate({
       target: pluggyCredentials.memberId,
-      set: { clientId, clientSecretEncrypted, updatedAt: new Date() },
+      set: {
+        clientId,
+        clientSecretEncrypted,
+        webhookId: sql`case when ${pluggyCredentials.clientId} = excluded.client_id then ${pluggyCredentials.webhookId} end`,
+        webhookRegisteredAt: sql`case when ${pluggyCredentials.clientId} = excluded.client_id then ${pluggyCredentials.webhookRegisteredAt} end`,
+        updatedAt: new Date(),
+      },
     });
 
   return { ok: true, message: "Credenciais validadas na Pluggy e salvas." };
 }
 
-async function loadApiKey(memberId: string) {
+export async function loadApiKey(memberId: string) {
   const [credentials] = await getDb()
     .select()
     .from(pluggyCredentials)
