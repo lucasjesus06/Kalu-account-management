@@ -1,14 +1,14 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { categories, categoryRules, expenseNatureRules, householdMembers, householdMemberships, transactions } from "@/db/schema";
+import { categories, categoryRules, expenseNatureRules, financialAccounts, householdMembers, householdMemberships, integrationConnections, transactions } from "@/db/schema";
 import { expenseChoiceOf, expenseNatureLabel, parseExpenseChoice } from "@/domain/expense-nature";
-import { householdScope } from "@/domain/scope";
+import { householdScope, type Scope } from "@/domain/scope";
 import { recordChange } from "./change-log";
 import { UUID_PATTERN, type ActionResult } from "./connections";
-import { refreshExpenseNature, loadExpenseNatureRules } from "./expense-nature";
+import { loadExpenseNatureRules, refreshExpenseNature, refreshOwnedExpenseNature } from "./expense-nature";
 import { listHouseholdMembers } from "./profiles";
-import { scopeAccountIds } from "./scope";
+import { ownedAccountIds, scopeAccountIds } from "./scope";
 
 export const RULE_MERCHANT_MAX = 120;
 
@@ -33,40 +33,64 @@ function parseMerchant(value: unknown) {
 
 const countLabel = (count: number) => (count === 1 ? "1 transação" : `${count} transações`);
 
-export async function listRules(householdId: string) {
-  const db = getDb();
-  const [category, nature, members] = await Promise.all([
+export async function loadHouseholdRules(db: Db | Tx, householdId: string) {
+  const [category, nature] = await Promise.all([
     db
-      .select({
-        id: categoryRules.id,
-        merchantName: categoryRules.merchantName,
-        categoryId: categoryRules.categoryId,
-        categoryName: categories.name,
-        updatedAt: categoryRules.updatedAt,
-        createdBy: householdMembers.displayName,
-      })
+      .select({ merchantName: categoryRules.merchantName, categoryId: categoryRules.categoryId })
+      .from(categoryRules)
+      .where(eq(categoryRules.householdId, householdId)),
+    loadExpenseNatureRules(db, householdId),
+  ]);
+  return { category: new Map(category.map((row) => [row.merchantName, row.categoryId])), nature };
+}
+
+export async function listRules(memberId: string, householdId: string | null) {
+  const db = getDb();
+  const categoryColumns = {
+    id: categoryRules.id,
+    merchantName: categoryRules.merchantName,
+    categoryId: categoryRules.categoryId,
+    categoryName: categories.name,
+    updatedAt: categoryRules.updatedAt,
+    createdBy: householdMembers.displayName,
+  };
+  const [personal, category, nature, members] = await Promise.all([
+    db
+      .select(categoryColumns)
       .from(categoryRules)
       .innerJoin(categories, eq(categories.id, categoryRules.categoryId))
       .leftJoin(householdMembers, eq(householdMembers.id, categoryRules.createdByMemberId))
-      .where(eq(categoryRules.householdId, householdId))
+      .where(eq(categoryRules.ownerMemberId, memberId))
       .orderBy(asc(categoryRules.merchantName)),
-    db
-      .select({
-        id: expenseNatureRules.id,
-        merchantName: expenseNatureRules.merchantName,
-        nature: expenseNatureRules.expenseNature,
-        memberId: expenseNatureRules.expenseMemberId,
-        updatedAt: expenseNatureRules.updatedAt,
-        createdBy: householdMembers.displayName,
-      })
-      .from(expenseNatureRules)
-      .leftJoin(householdMembers, eq(householdMembers.id, expenseNatureRules.createdByMemberId))
-      .where(eq(expenseNatureRules.householdId, householdId))
-      .orderBy(asc(expenseNatureRules.merchantName)),
-    listHouseholdMembers(householdId),
+    householdId
+      ? db
+          .select(categoryColumns)
+          .from(categoryRules)
+          .innerJoin(categories, eq(categories.id, categoryRules.categoryId))
+          .leftJoin(householdMembers, eq(householdMembers.id, categoryRules.createdByMemberId))
+          .where(eq(categoryRules.householdId, householdId))
+          .orderBy(asc(categoryRules.merchantName))
+      : [],
+    householdId
+      ? db
+          .select({
+            id: expenseNatureRules.id,
+            merchantName: expenseNatureRules.merchantName,
+            nature: expenseNatureRules.expenseNature,
+            memberId: expenseNatureRules.expenseMemberId,
+            updatedAt: expenseNatureRules.updatedAt,
+            createdBy: householdMembers.displayName,
+          })
+          .from(expenseNatureRules)
+          .leftJoin(householdMembers, eq(householdMembers.id, expenseNatureRules.createdByMemberId))
+          .where(eq(expenseNatureRules.householdId, householdId))
+          .orderBy(asc(expenseNatureRules.merchantName))
+      : [],
+    householdId ? listHouseholdMembers(householdId) : [],
   ]);
 
   return {
+    personal,
     category,
     nature: nature.map((rule) => ({
       ...rule,
@@ -81,13 +105,13 @@ export async function listRules(householdId: string) {
   };
 }
 
-export async function listKnownMerchants(householdId: string, limit = 200) {
+export async function listKnownMerchants(scope: Scope, limit = 200) {
   const rows = await getDb()
     .select({ merchantName: transactions.merchantName, total: sql<number>`count(*)`.mapWith(Number) })
     .from(transactions)
     .where(
       and(
-        inArray(transactions.accountId, scopeAccountIds(householdScope(householdId))),
+        inArray(transactions.accountId, scopeAccountIds(scope)),
         sql`${transactions.merchantName} is not null`,
       ),
     )
@@ -97,7 +121,10 @@ export async function listKnownMerchants(householdId: string, limit = 200) {
   return rows.flatMap((row) => (row.merchantName ? [row.merchantName] : []));
 }
 
-function logRule(tx: Tx, entry: { householdId: string; memberId: string; kind: "rule_saved" | "rule_removed"; merchant: string; detail: string; count?: number }) {
+async function logRule(tx: Tx, entry: { householdId: string | null; memberId: string; kind: "rule_saved" | "rule_removed"; merchant: string; detail: string; count?: number }) {
+  if (!entry.householdId) {
+    return;
+  }
   return recordChange(tx, {
     householdId: entry.householdId,
     memberId: entry.memberId,
@@ -111,7 +138,7 @@ function logRule(tx: Tx, entry: { householdId: string; memberId: string; kind: "
 
 export async function saveCategoryRule(
   memberId: string,
-  householdId: string,
+  householdId: string | null,
   rawMerchant: unknown,
   categoryId: string,
   applyHistory: boolean,
@@ -123,7 +150,7 @@ export async function saveCategoryRule(
   if (!UUID_PATTERN.test(categoryId)) {
     return { ok: false, error: "Escolha uma categoria." };
   }
-  if (!(await isMember(memberId, householdId))) {
+  if (householdId && !(await isMember(memberId, householdId))) {
     return { ok: false, error: "Você não participa desta residência." };
   }
 
@@ -133,14 +160,25 @@ export async function saveCategoryRule(
     return { ok: false, error: "Categoria não encontrada." };
   }
 
+  const reach = householdId ? scopeAccountIds(householdScope(householdId)) : ownedAccountIds(memberId);
   const updated = await db.transaction(async (tx) => {
-    await tx
-      .insert(categoryRules)
-      .values({ householdId, merchantName: merchant, categoryId, createdByMemberId: memberId })
-      .onConflictDoUpdate({
-        target: [categoryRules.householdId, categoryRules.merchantName],
-        set: { categoryId, createdByMemberId: memberId, updatedAt: new Date() },
-      });
+    if (householdId) {
+      await tx
+        .insert(categoryRules)
+        .values({ householdId, merchantName: merchant, categoryId, createdByMemberId: memberId })
+        .onConflictDoUpdate({
+          target: [categoryRules.householdId, categoryRules.merchantName],
+          set: { categoryId, createdByMemberId: memberId, updatedAt: new Date() },
+        });
+    } else {
+      await tx
+        .insert(categoryRules)
+        .values({ ownerMemberId: memberId, merchantName: merchant, categoryId, createdByMemberId: memberId })
+        .onConflictDoUpdate({
+          target: [categoryRules.ownerMemberId, categoryRules.merchantName],
+          set: { categoryId, updatedAt: new Date() },
+        });
+    }
     const changed = applyHistory
       ? await tx
           .update(transactions)
@@ -148,9 +186,17 @@ export async function saveCategoryRule(
           .where(
             and(
               eq(transactions.merchantName, merchant),
-              inArray(transactions.accountId, scopeAccountIds(householdScope(householdId))),
+              inArray(transactions.accountId, reach),
               sql`${transactions.categorySource} is distinct from 'user'`,
               sql`${transactions.categoryId} is distinct from ${categoryId}`,
+              householdId
+                ? sql`not exists (
+                    select 1 from ${categoryRules} personal
+                    join ${integrationConnections} on ${integrationConnections.memberId} = personal.owner_member_id
+                    join ${financialAccounts} on ${financialAccounts.connectionId} = ${integrationConnections.id}
+                    where ${financialAccounts.id} = ${transactions.accountId} and personal.merchant_name = ${merchant}
+                  )`
+                : undefined,
             ),
           )
           .returning({ id: transactions.id })
@@ -160,8 +206,12 @@ export async function saveCategoryRule(
   });
 
   if (applyHistory) {
-    const rules = await loadExpenseNatureRules(db, householdId);
-    await refreshExpenseNature(db, and(eq(transactions.merchantName, merchant), inArray(transactions.accountId, scopeAccountIds(householdScope(householdId))))!, rules);
+    const where = eq(transactions.merchantName, merchant);
+    if (householdId) {
+      await refreshExpenseNature(db, and(where, inArray(transactions.accountId, reach))!, await loadExpenseNatureRules(db, householdId));
+    } else {
+      await refreshOwnedExpenseNature(db, memberId, where);
+    }
   }
   return {
     ok: true,
@@ -177,11 +227,17 @@ export async function deleteCategoryRule(memberId: string, ruleId: string): Prom
   }
   const db = getDb();
   const [rule] = await db
-    .select({ householdId: categoryRules.householdId, merchantName: categoryRules.merchantName, categoryName: categories.name })
+    .select({
+      householdId: categoryRules.householdId,
+      ownerMemberId: categoryRules.ownerMemberId,
+      merchantName: categoryRules.merchantName,
+      categoryName: categories.name,
+    })
     .from(categoryRules)
     .innerJoin(categories, eq(categories.id, categoryRules.categoryId))
     .where(eq(categoryRules.id, ruleId));
-  if (!rule || !(await isMember(memberId, rule.householdId))) {
+  const allowed = rule ? (rule.householdId ? await isMember(memberId, rule.householdId) : rule.ownerMemberId === memberId) : false;
+  if (!rule || !allowed) {
     return { ok: false, error: "Regra não encontrada." };
   }
   await db.transaction(async (tx) => {

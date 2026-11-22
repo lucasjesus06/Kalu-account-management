@@ -4,7 +4,7 @@ import { getDb } from "@/db/client";
 import { financialAccounts, householdMemberships, householdSharedAccounts, integrationConnections } from "@/db/schema";
 import type { Scope } from "@/domain/scope";
 
-function ownedAccountIds(memberId: string) {
+export function ownedAccountIds(memberId: string) {
   return getDb()
     .select({ id: financialAccounts.id })
     .from(financialAccounts)

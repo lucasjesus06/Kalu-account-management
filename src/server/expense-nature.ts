@@ -1,11 +1,12 @@
 import "server-only";
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { getDb } from "@/db/client";
 import {
   categories,
   expenseNatureRules,
   householdMembers,
+  householdSharedAccounts,
   transactions,
 } from "@/db/schema";
 import {
@@ -17,7 +18,7 @@ import {
 import { UUID_PATTERN, type ActionResult } from "./connections";
 import type { CorrectionScope } from "./categorization";
 import { listHouseholdMembers } from "./profiles";
-import { accountVisibleTo } from "./scope";
+import { accountVisibleTo, ownedAccountIds } from "./scope";
 import { recordChange } from "./change-log";
 
 type Db = ReturnType<typeof getDb>;
@@ -96,9 +97,22 @@ export async function refreshExpenseNature(db: Executor, scope: SQL, rules: Read
 
 export type Editor = { memberId: string; householdId: string | null };
 
-export async function refreshEditableExpenseNature(db: Executor, editor: Editor, scope: SQL) {
-  const rules = editor.householdId ? await loadExpenseNatureRules(db, editor.householdId) : new Map<string, ExpenseAssignment>();
-  return refreshExpenseNature(db, and(scope, accountVisibleTo(editor.memberId, transactions.accountId))!, rules);
+export async function refreshOwnedExpenseNature(db: Executor, memberId: string, scope: SQL) {
+  const owned = and(scope, inArray(transactions.accountId, ownedAccountIds(memberId)))!;
+  const links = await db
+    .selectDistinct({ householdId: householdSharedAccounts.householdId })
+    .from(householdSharedAccounts)
+    .where(inArray(householdSharedAccounts.accountId, ownedAccountIds(memberId)));
+  let changed = 0;
+  for (const { householdId } of links) {
+    const sharedIds = db
+      .select({ id: householdSharedAccounts.accountId })
+      .from(householdSharedAccounts)
+      .where(eq(householdSharedAccounts.householdId, householdId));
+    changed += await refreshExpenseNature(db, and(owned, inArray(transactions.accountId, sharedIds))!, await loadExpenseNatureRules(db, householdId));
+  }
+  const allShared = db.select({ id: householdSharedAccounts.accountId }).from(householdSharedAccounts);
+  return changed + (await refreshExpenseNature(db, and(owned, notInArray(transactions.accountId, allShared))!, new Map()));
 }
 
 function countLabel(count: number) {

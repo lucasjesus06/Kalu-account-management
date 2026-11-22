@@ -141,9 +141,8 @@ export const categoryRules = pgTable(
   "category_rules",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    householdId: uuid("household_id")
-      .notNull()
-      .references(() => households.id, { onDelete: "cascade" }),
+    householdId: uuid("household_id").references(() => households.id, { onDelete: "cascade" }),
+    ownerMemberId: uuid("owner_member_id").references(() => householdMembers.id, { onDelete: "cascade" }),
     merchantName: text("merchant_name").notNull(),
     categoryId: uuid("category_id")
       .notNull()
@@ -152,7 +151,14 @@ export const categoryRules = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("category_rules_household_merchant_idx").on(table.householdId, table.merchantName)],
+  (table) => [
+    uniqueIndex("category_rules_household_merchant_idx").on(table.householdId, table.merchantName),
+    uniqueIndex("category_rules_owner_merchant_idx").on(table.ownerMemberId, table.merchantName),
+    check(
+      "category_rules_owner_check",
+      sql`(${table.householdId} is not null)::int + (${table.ownerMemberId} is not null)::int = 1`,
+    ),
+  ],
 ).enableRLS();
 
 export const expenseNatureRules = pgTable(

@@ -5,9 +5,8 @@ import {
   categories,
   categoryRules,
   creditCardBills,
-  expenseNatureRules,
   financialAccounts,
-  householdMembers,
+  householdSharedAccounts,
   integrationConnections,
   pluggyCredentials,
   syncRuns,
@@ -29,6 +28,7 @@ import {
 import { evaluateAndNotify } from "./budget";
 import { decrypt } from "./crypto";
 import { refreshExpenseNature } from "./expense-nature";
+import { loadHouseholdRules } from "./rules";
 import { listHouseholdLinks } from "./profiles";
 
 export type SyncResult =
@@ -358,28 +358,15 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
     let billsCount = 0;
     let transactionsCount = 0;
     const changes: TransactionChanges = { created: 0, updated: 0, removed: 0 };
-    const [categoryRows, ruleRows, natureRuleRows] = await Promise.all([
+    const [categoryRows, personalRuleRows] = await Promise.all([
       db.select({ id: categories.id, slug: categories.slug }).from(categories),
       db
         .select({ merchantName: categoryRules.merchantName, categoryId: categoryRules.categoryId })
         .from(categoryRules)
-        .innerJoin(householdMembers, eq(householdMembers.householdId, categoryRules.householdId))
-        .where(eq(householdMembers.id, connection.memberId)),
-      db
-        .select({
-          merchantName: expenseNatureRules.merchantName,
-          nature: expenseNatureRules.expenseNature,
-          memberId: expenseNatureRules.expenseMemberId,
-        })
-        .from(expenseNatureRules)
-        .innerJoin(householdMembers, eq(householdMembers.householdId, expenseNatureRules.householdId))
-        .where(eq(householdMembers.id, connection.memberId)),
+        .where(eq(categoryRules.ownerMemberId, connection.memberId)),
     ]);
-    const natureRules = new Map(natureRuleRows.map(({ merchantName, ...assignment }) => [merchantName, assignment]));
-    const categorizer: Categorizer = {
-      categoryIds: new Map(categoryRows.map((row) => [row.slug, row.id])),
-      rules: new Map(ruleRows.map((row) => [row.merchantName, row.categoryId])),
-    };
+    const categoryIds = new Map(categoryRows.map((row) => [row.slug, row.id]));
+    const personalRules = new Map(personalRuleRows.map((row) => [row.merchantName, row.categoryId]));
     for (const account of accounts) {
       const bills = account.kind === "credit_card" ? await listBills(apiKey, account) : [];
       const imported = await listTransactions(apiKey, account);
@@ -388,11 +375,19 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
         const accountId = await saveAccount(tx, connection.id, account);
         const billIds = await saveBills(tx, accountId, bills);
         const saved = await saveTransactions(tx, accountId, imported, billIds);
-        await categorizeTransactions(tx, accountId, categorizer);
+        const [shared] = await tx
+          .select({ householdId: householdSharedAccounts.householdId })
+          .from(householdSharedAccounts)
+          .where(eq(householdSharedAccounts.accountId, accountId));
+        const householdRules = shared ? await loadHouseholdRules(tx, shared.householdId) : null;
+        await categorizeTransactions(tx, accountId, {
+          categoryIds,
+          rules: new Map([...(householdRules?.category ?? []), ...personalRules]),
+        });
         await refreshExpenseNature(
           tx,
           and(eq(transactions.accountId, accountId), isNull(transactions.expenseNatureSource))!,
-          natureRules,
+          householdRules?.nature ?? new Map(),
         );
         return saved;
       });

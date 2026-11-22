@@ -1,11 +1,11 @@
 import "server-only";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { categories, categoryRules, transactions } from "@/db/schema";
 import { UUID_PATTERN, type ActionResult } from "./connections";
 import { recordChange } from "./change-log";
-import { refreshEditableExpenseNature, type Editor } from "./expense-nature";
-import { accountVisibleTo } from "./scope";
+import { refreshOwnedExpenseNature, type Editor } from "./expense-nature";
+import { accountVisibleTo, ownedAccountIds } from "./scope";
 
 export const correctionScopes = ["transaction", "merchant", "merchant_history"] as const;
 export type CorrectionScope = (typeof correctionScopes)[number];
@@ -29,9 +29,6 @@ export async function correctCategory(
   if (categoryId === null && scope !== "transaction") {
     return { ok: false, error: "Escolha uma categoria para criar uma regra." };
   }
-  if (scope !== "transaction" && !member.householdId) {
-    return { ok: false, error: "Regras de categoria só existem dentro de uma residência." };
-  }
 
   const db = getDb();
   const [transaction] = await db
@@ -40,12 +37,16 @@ export async function correctCategory(
       merchantName: transactions.merchantName,
       description: transactions.description,
       categoryName: categories.name,
+      owned: inArray(transactions.accountId, ownedAccountIds(member.memberId)),
     })
     .from(transactions)
     .leftJoin(categories, eq(categories.id, transactions.categoryId))
     .where(and(eq(transactions.id, transactionId), accountVisibleTo(member.memberId, transactions.accountId)));
   if (!transaction) {
     return { ok: false, error: "Transação não encontrada." };
+  }
+  if (!transaction.owned) {
+    return { ok: false, error: "A categoria só pode ser alterada por quem conectou a conta." };
   }
 
   let category: { id: string; name: string } | undefined;
@@ -86,7 +87,7 @@ export async function correctCategory(
         .where(eq(transactions.id, transaction.id));
       await logChange(tx, 1);
     });
-    await refreshEditableExpenseNature(db, member, eq(transactions.id, transaction.id));
+    await refreshOwnedExpenseNature(db, member.memberId, eq(transactions.id, transaction.id));
     return { ok: true, message: `Categoria alterada para ${categoryLabel} somente nesta transação.` };
   }
 
@@ -94,14 +95,14 @@ export async function correctCategory(
     await tx
       .insert(categoryRules)
       .values({
-        householdId: member.householdId!,
+        ownerMemberId: member.memberId,
         merchantName: merchant,
         categoryId: category!.id,
         createdByMemberId: member.memberId,
       })
       .onConflictDoUpdate({
-        target: [categoryRules.householdId, categoryRules.merchantName],
-        set: { categoryId: category!.id, createdByMemberId: member.memberId, updatedAt: new Date() },
+        target: [categoryRules.ownerMemberId, categoryRules.merchantName],
+        set: { categoryId: category!.id, updatedAt: new Date() },
       });
 
     await tx
@@ -119,7 +120,7 @@ export async function correctCategory(
       .where(
         and(
           eq(transactions.merchantName, merchant),
-          accountVisibleTo(member.memberId, transactions.accountId),
+          inArray(transactions.accountId, ownedAccountIds(member.memberId)),
           sql`${transactions.categorySource} is distinct from 'user'`,
           sql`${transactions.categoryId} is distinct from ${category!.id}`,
         ),
@@ -128,9 +129,9 @@ export async function correctCategory(
     await logChange(tx, updated.length + 1);
     return updated.length;
   });
-  await refreshEditableExpenseNature(
+  await refreshOwnedExpenseNature(
     db,
-    member,
+    member.memberId,
     scope === "merchant_history" ? eq(transactions.merchantName, merchant) : eq(transactions.id, transaction.id),
   );
 

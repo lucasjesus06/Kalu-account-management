@@ -112,23 +112,24 @@ describe("correção de categoria", () => {
     expect(await row(ids.anterior)).toEqual({ category: "outros", source: "automatic" });
     const [rule] = await db().select().from(categoryRules);
     expect(rule).toMatchObject({
-      householdId: lucas.householdId,
+      householdId: null,
+      ownerMemberId: lucas.memberId,
       merchantName: "PADARIA DO ZE",
       categoryId: category.supermercado,
       createdByMemberId: lucas.memberId,
     });
   });
 
-  it("incluindo o histórico: aplica na residência inteira e preserva as exceções do usuário", async () => {
+  it("incluindo o histórico: aplica nas contas do dono e preserva as exceções do usuário", async () => {
     const result = await correctCategory(lucas, ids.alvo, category.supermercado, "merchant_history");
 
     expect(result).toEqual({
       ok: true,
       message:
-        "Categoria alterada para Supermercado em PADARIA DO ZE, incluindo 2 transações anteriores. Ajustes feitos só numa transação foram mantidos.",
+        "Categoria alterada para Supermercado em PADARIA DO ZE, incluindo 1 transação anterior. Ajustes feitos só numa transação foram mantidos.",
     });
     expect(await row(ids.anterior)).toEqual({ category: "supermercado", source: "rule" });
-    expect(await row(ids.daKarina)).toEqual({ category: "supermercado", source: "rule" });
+    expect(await row(ids.daKarina)).toEqual({ category: null, source: null });
     expect(await row(ids.excecao)).toEqual({ category: "restaurantes", source: "user" });
     expect(await row(ids.outroEstabelecimento)).toEqual({ category: "outros", source: "automatic" });
     expect(await row(ids.outraResidencia)).toEqual({ category: "outros", source: "automatic" });
@@ -158,6 +159,24 @@ describe("correção de categoria", () => {
       ok: false,
       error: "Escolha uma categoria para criar uma regra.",
     });
+  });
+
+  it("só o dono da conta altera a categoria, mesmo em conta compartilhada", async () => {
+    expect(await correctCategory(lucas, ids.daKarina, category.supermercado, "transaction")).toEqual({
+      ok: false,
+      error: "A categoria só pode ser alterada por quem conectou a conta.",
+    });
+    expect(await row(ids.daKarina)).toEqual({ category: null, source: null });
+    expect(await db().$count(categoryRules)).toBe(0);
+  });
+
+  it("sem residência, o dono cria regra e corrige o histórico", async () => {
+    const solo = { memberId: lucas.memberId, householdId: null };
+
+    const result = await correctCategory(solo, ids.alvo, category.supermercado, "merchant_history");
+
+    expect(result.ok).toBe(true);
+    expect(await row(ids.anterior)).toEqual({ category: "supermercado", source: "rule" });
   });
 
   it("não deixa corrigir transação de outra residência", async () => {

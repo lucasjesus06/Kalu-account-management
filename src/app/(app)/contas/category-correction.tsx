@@ -107,8 +107,8 @@ function CorrectionForm({
           </label>
         ))}
         <p className="mt-1 text-xs text-muted-foreground">
-          Vale para o que você mudar acima. As duas últimas opções criam uma regra para a residência. Ajustes feitos só numa transação nunca são substituídos
-          por regras.
+          Vale para o que você mudar acima. As duas últimas opções criam uma regra: a de categoria vale só nas contas que você conectou, a de para quem vale
+          na residência. A categoria só pode ser alterada por quem conectou a conta. Ajustes feitos só numa transação nunca são substituídos por regras.
         </p>
       </fieldset>
         </>

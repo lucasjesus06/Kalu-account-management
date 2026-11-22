@@ -8,6 +8,7 @@ import {
   creditCardBills,
   expenseNatureRules,
   financialAccounts,
+  householdSharedAccounts,
   householdMembers,
   householdMemberships,
   integrationConnections,
@@ -105,6 +106,19 @@ beforeEach(async () => {
   };
   simulatePluggy();
 });
+
+
+async function shareAccountsWithHousehold() {
+  if ((await db().$count(financialAccounts)) === 0) {
+    await syncConnection(connectionId);
+    await db().delete(transactions);
+  }
+  const accounts = await db().select({ id: financialAccounts.id }).from(financialAccounts);
+  await db()
+    .insert(householdSharedAccounts)
+    .values(accounts.map((account) => ({ householdId, accountId: account.id, sharedByMemberId: lucasId })))
+    .onConflictDoNothing();
+}
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -577,6 +591,7 @@ describe("regras de categoria da residência na sincronização", () => {
 
   async function addRule(merchantName: string, slug: string) {
     const [category] = await db().select().from(categories).where(eq(categories.slug, slug));
+    await shareAccountsWithHousehold();
     await db().insert(categoryRules).values({ householdId, merchantName, categoryId: category.id });
   }
 
@@ -638,6 +653,7 @@ describe("para quem na sincronização", () => {
   }
 
   async function addNatureRule(merchantName: string) {
+    await shareAccountsWithHousehold();
     await db()
       .insert(expenseNatureRules)
       .values({ householdId, merchantName, expenseNature: "individual", expenseMemberId: karinaId });
@@ -651,6 +667,7 @@ describe("para quem na sincronização", () => {
 
   it("marca como Casa o que cai numa categoria da residência", async () => {
     const [mercado] = await db().select().from(categories).where(eq(categories.slug, "supermercado"));
+    await shareAccountsWithHousehold();
     await db().insert(categoryRules).values({ householdId, merchantName: "COMPANHIA TESTE", categoryId: mercado.id });
 
     await syncConnection(connectionId);
@@ -690,5 +707,43 @@ describe("para quem na sincronização", () => {
 
     expect(await natureOf(PENDING_ID)).toEqual({ nature: "individual", memberId: karinaId, source: "rule" });
     expect(await natureOf(RESTAURANT_ID)).toEqual({ nature: "shared", memberId: null, source: "user" });
+  });
+});
+
+describe("regras pessoais de categoria na sincronização", () => {
+  it("a regra do dono vale mais que a da residência nas contas compartilhadas", async () => {
+    const [transporte] = await db().select().from(categories).where(eq(categories.slug, "transporte"));
+    const [saude] = await db().select().from(categories).where(eq(categories.slug, "saude"));
+    await syncConnection(connectionId);
+    await db().delete(transactions);
+    const accounts = await db().select({ id: financialAccounts.id }).from(financialAccounts);
+    await db()
+      .insert(householdSharedAccounts)
+      .values(accounts.map((account) => ({ householdId, accountId: account.id, sharedByMemberId: lucasId })));
+    await db().insert(categoryRules).values({ householdId, merchantName: "UBER", categoryId: saude.id });
+    await db().insert(categoryRules).values({ ownerMemberId: lucasId, merchantName: "UBER", categoryId: transporte.id });
+
+    await syncConnection(connectionId);
+
+    const [row] = await db()
+      .select({ category: categories.slug, source: transactions.categorySource })
+      .from(transactions)
+      .leftJoin(categories, eq(categories.id, transactions.categoryId))
+      .where(eq(transactions.externalId, PENDING_ID));
+    expect(row).toEqual({ category: "transporte", source: "rule" });
+  });
+
+  it("vale também para contas que não estão em nenhuma residência", async () => {
+    const [transporte] = await db().select().from(categories).where(eq(categories.slug, "transporte"));
+    await db().insert(categoryRules).values({ ownerMemberId: lucasId, merchantName: "UBER", categoryId: transporte.id });
+
+    await syncConnection(connectionId);
+
+    const [row] = await db()
+      .select({ category: categories.slug })
+      .from(transactions)
+      .leftJoin(categories, eq(categories.id, transactions.categoryId))
+      .where(eq(transactions.externalId, PENDING_ID));
+    expect(row).toEqual({ category: "transporte" });
   });
 });

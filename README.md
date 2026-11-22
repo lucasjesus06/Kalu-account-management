@@ -224,10 +224,12 @@ Em **Contas**, cada conta corrente ou poupança tem o atalho **Ver extrato**, qu
 Na tela da fatura, cada transação tem o botão **Alterar**, que abre a correção com três opções:
 
 - **Somente nesta transação**: a escolha fica marcada como do usuário (`user`) e nenhuma regra é criada. Esse tipo de ajuste nunca é substituído por regras.
-- **Nesta e nas próximas deste estabelecimento**: cria ou atualiza uma regra da residência para o estabelecimento normalizado (tabela `category_rules`). As transações anteriores não mudam.
-- **Em todas deste estabelecimento, inclusive as anteriores**: cria a regra e a reaplica explicitamente ao histórico da residência, preservando os ajustes feitos só numa transação.
+- **Nesta e nas próximas deste estabelecimento**: cria ou atualiza uma regra pessoal para o estabelecimento normalizado (tabela `category_rules`, com `owner_member_id`). As transações anteriores não mudam.
+- **Em todas deste estabelecimento, inclusive as anteriores**: cria a regra e a reaplica explicitamente ao histórico das contas do titular, preservando os ajustes feitos só numa transação.
 
-Na sincronização, a regra da residência vem antes das regras automáticas. As transações mostram quando a categoria veio de uma regra da residência ou de um ajuste.
+A categoria pertence a quem conectou a conta: só o titular a altera, mesmo numa conta compartilhada. Quem não é o titular continua podendo definir "para quem" o gasto foi. A regra pessoal funciona sem residência e vale só nas contas do titular.
+
+Na sincronização, a ordem é: regra pessoal do titular, regra de categoria da residência com a qual a conta está compartilhada (criada em Configurações, Regras, e usada nas contas sem regra própria) e, por fim, as regras automáticas. As transações mostram quando a categoria veio de uma regra ou de um ajuste.
 
 A sincronização categoriza só as transações ainda não avaliadas, então mudar uma regra não reescreve o histórico. Uma transação categorizada automaticamente volta a ser avaliada apenas se a descrição ou a categoria da fonte mudar. Classificações feitas pelo usuário nunca são alteradas pela sincronização. A tela Contas mostra a porcentagem das compras de cada cartão que têm categoria.
 
@@ -267,7 +269,7 @@ A engrenagem no cabeçalho abre `/configuracoes`, com um menu e uma tela para ca
 - Conta: e-mail, nome de exibição, troca de senha (confere a senha atual, mínimo de 8 caracteres) e sair.
 - Família: residências, integrantes, convites, saída e transferência de administração.
 - Compartilhamento: para cada conta sua, escolher se fica só com você ou aparece numa residência.
-- Regras: o motor de regras da residência ativa. Lista as regras de categoria e de para quem, troca o resultado direto na linha, remove e cria novas, com sugestão de estabelecimentos já vistos nas transações. Criar ou trocar aplica ao histórico, sem substituir ajustes feitos à mão. Remover uma regra de categoria mantém as transações já classificadas, e remover uma de para quem devolve à classificação automática o que não foi ajustado à mão. Criação e remoção entram no histórico, filtro Regras.
+- Regras: o motor de regras. Mostra as regras pessoais de categoria (valem nas contas do titular, mesmo sem residência) e, com uma residência ativa, as regras de categoria e de para quem dela. Lista as regras, troca o resultado direto na linha, remove e cria novas, com sugestão de estabelecimentos já vistos nas transações. Criar ou trocar aplica ao histórico, sem substituir ajustes feitos à mão. Remover uma regra de categoria mantém as transações já classificadas, e remover uma de para quem devolve à classificação automática o que não foi ajustado à mão. Criação e remoção entram no histórico, filtro Regras.
 - Notificações: ativar os avisos de meta no dispositivo.
 - Conexões bancárias continua na tela própria, com atalho no menu.
 
@@ -280,7 +282,8 @@ Cada pessoa tem o próprio espaço financeiro e usa o Kalu sem criar residência
 - O titular escolhe onde cada conta aparece em Configurações, na tela Compartilhamento (Só eu ou uma das suas residências, salvo ao escolher), e pode desfazer quando quiser. O histórico da residência registra quem compartilhou e quem deixou de compartilhar.
 - O seletor no cabeçalho alterna entre Pessoal e cada residência da pessoa e só aparece para quem participa de alguma. O escolhido fica no cookie `kalu-escopo`; sem escolha, abre a primeira residência, ou o espaço pessoal para quem não tem residência.
 - Os valores da tela inicial, análise, contas, extrato, fatura e exportação seguem o escopo escolhido: no pessoal, as contas do titular; na residência, as contas compartilhadas com ela. Metas, histórico e avisos continuam sendo da residência e não aparecem no espaço pessoal.
-- Uma pessoa pode corrigir a classificação de transações de contas dela ou compartilhadas com uma residência da qual participa. No espaço pessoal, "para quem" e as regras por estabelecimento não se aplicam, só a correção de uma transação.
+- Uma pessoa pode corrigir a classificação de transações de contas dela ou compartilhadas com uma residência da qual participa. A categoria só é alterada pelo titular da conta; "para quem" pode ser definido por qualquer integrante da residência. No espaço pessoal, "para quem" não se aplica, mas as regras pessoais de categoria sim.
+- A migração 0021 permite regras de categoria pessoais, sem residência.
 - A migração 0019 compartilha as contas já existentes com a residência atual do titular. As conectadas depois começam privadas.
 - Nada pressupõe que os integrantes de uma residência sejam casados ou parentes.
 

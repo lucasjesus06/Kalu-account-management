@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { categories, categoryRules, expenseNatureRules, financialAccounts, integrationConnections, transactions } from "@/db/schema";
+import { householdScope } from "@/domain/scope";
 import { createTestDatabase, seedHousehold, shareWithMemberHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown }));
@@ -79,7 +80,7 @@ describe("regras de categoria", () => {
   it("salvar de novo troca a categoria da mesma regra", async () => {
     await saveCategoryRule(lucas.id, householdId, "LOJA", category.supermercado, false);
     await saveCategoryRule(lucas.id, householdId, "LOJA", category.restaurantes, false);
-    const rules = (await listRules(householdId)).category;
+    const rules = (await listRules(lucas.id, householdId)).category;
     expect(rules.map((r) => [r.merchantName, r.categoryId])).toEqual([["LOJA", category.restaurantes]]);
   });
 
@@ -121,7 +122,7 @@ describe("regras de para quem", () => {
 
     await saveNatureRule(lucas.id, householdId, "CONDOMINIO", karina.id, true);
     expect(await read(id)).toMatchObject({ expenseNature: "individual", expenseMemberId: karina.id });
-    expect((await listRules(householdId)).nature.map((r) => r.label)).toEqual(["Karina"]);
+    expect((await listRules(lucas.id, householdId)).nature.map((r) => r.label)).toEqual(["Karina"]);
   });
 
   it("recusa escolha inválida e pessoa de fora", async () => {
@@ -143,13 +144,52 @@ describe("regras de para quem", () => {
   });
 });
 
+describe("regras pessoais de categoria", () => {
+  it("funcionam sem residência e só atingem as contas do dono", async () => {
+    const mine = await purchase("LOJA");
+    const [otherConnection] = await db().insert(integrationConnections).values({ memberId: karina.id, externalItemId: "item2", institutionName: "Banco 2" }).returning();
+    const [otherAccount] = await db()
+      .insert(financialAccounts)
+      .values({ connectionId: otherConnection.id, externalId: "conta2", kind: "checking", name: "Conta 2", currency: "BRL", balanceCents: 0 })
+      .returning();
+    const [theirs] = await db()
+      .insert(transactions)
+      .values({ accountId: otherAccount.id, externalId: "x1", occurredAt: new Date(), description: "LOJA", merchantName: "LOJA", amountCents: 100, direction: "outflow", status: "posted", currency: "BRL" })
+      .returning();
+
+    expect(await saveCategoryRule(lucas.id, null, "LOJA", category.supermercado, true)).toMatchObject({ ok: true });
+
+    expect(await db().$count(categoryRules)).toBe(1);
+    expect(await read(mine)).toMatchObject({ categoryId: category.supermercado, categorySource: "rule" });
+    expect((await db().select().from(transactions).where((await import("drizzle-orm")).eq(transactions.id, theirs.id)))[0]).toMatchObject({ categoryId: null });
+    expect((await listRules(lucas.id, null)).personal.map((r) => r.merchantName)).toEqual(["LOJA"]);
+    expect(await db().$count((await import("@/db/schema")).changeLog)).toBe(0);
+  });
+
+  it("a regra da residência não sobrescreve quem tem regra própria", async () => {
+    const id = await purchase("LOJA");
+    await saveCategoryRule(lucas.id, null, "LOJA", category.restaurantes, true);
+    await saveCategoryRule(karina.id, householdId, "LOJA", category.supermercado, true);
+
+    expect(await read(id)).toMatchObject({ categoryId: category.restaurantes });
+  });
+
+  it("só o dono remove a regra pessoal", async () => {
+    await saveCategoryRule(lucas.id, null, "LOJA", category.supermercado, false);
+    const [rule] = await db().select().from(categoryRules);
+
+    expect(await deleteCategoryRule(karina.id, rule.id)).toMatchObject({ ok: false });
+    expect(await deleteCategoryRule(lucas.id, rule.id)).toMatchObject({ ok: true });
+  });
+});
+
 describe("estabelecimentos conhecidos", () => {
   it("lista os mais frequentes das contas da residência", async () => {
     await purchase("PADARIA");
     await purchase("PADARIA");
     await purchase("MERCADO");
     const outra = await seedHousehold(db());
-    expect(await listKnownMerchants(householdId)).toEqual(["PADARIA", "MERCADO"]);
-    expect(await listKnownMerchants(outra.household.id)).toEqual([]);
+    expect(await listKnownMerchants(householdScope(householdId))).toEqual(["PADARIA", "MERCADO"]);
+    expect(await listKnownMerchants(householdScope(outra.household.id))).toEqual([]);
   });
 });
