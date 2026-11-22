@@ -77,6 +77,31 @@ async function get<T>(apiKey: string, url: string, resource: string): Promise<T>
   return (await response.json()) as T;
 }
 
+export async function createConnectToken(apiKey: string, itemId?: string) {
+  const response = await fetch(`${baseUrl()}/connect_token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "X-API-KEY": apiKey },
+    body: JSON.stringify({ ...(itemId ? { itemId } : {}), options: { avoidDuplicates: true } }),
+    cache: "no-store",
+  });
+
+  if (response.status === 401) {
+    throw new PluggyAuthError("Chave de acesso da Pluggy inválida ou expirada");
+  }
+  if ([403, 404].includes(response.status)) {
+    throw new PluggyNotFoundError("Item não encontrado para estas credenciais");
+  }
+  if (!response.ok) {
+    throw new PluggyRequestError(`Falha ao abrir a conexão na Pluggy (HTTP ${response.status})`, response.status);
+  }
+
+  const body = (await response.json()) as { accessToken?: unknown };
+  if (typeof body.accessToken !== "string" || !body.accessToken) {
+    throw new PluggyRequestError("Resposta da Pluggy sem token de conexão", response.status);
+  }
+  return body.accessToken;
+}
+
 export async function getItem(apiKey: string, itemId: string): Promise<PluggyItemSummary> {
   const body = await get<{
     id?: unknown;
