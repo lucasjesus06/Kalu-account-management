@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense, type ReactNode } from "react";
-import { BookOpen, Download, Gauge, List, ShieldCheck } from "lucide-react";
+import { BookOpen, Download, Gauge, List, ShieldCheck, Users } from "lucide-react";
 import { Change } from "@/components/change";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/panel";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import type { ComparisonRow } from "@/domain/consumption";
+import { consumptionNature, type ComparisonRow } from "@/domain/consumption";
+import { expenseNatureKey } from "@/domain/expense-nature";
 import { fromCents } from "@/domain/money";
 import { formatDate, formatDateTime, formatMonth, formatPercent, formatPeriod } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -110,7 +111,7 @@ async function AnalysisContent({ searchParams }: Pick<PageProps<"/analise">, "se
     return <p className="text-muted-foreground">Sua conta ainda não está vinculada a uma residência.</p>;
   }
 
-  const { mes, comparar, categoria } = await searchParams;
+  const { mes, comparar, categoria, para } = await searchParams;
   const [comparison, categories, members] = await Promise.all([
     getConsumptionComparison(
       member.householdId,
@@ -126,9 +127,19 @@ async function AnalysisContent({ searchParams }: Pick<PageProps<"/analise">, "se
   const previousLabel = formatPeriod(periods.previous);
   const baseQuery = `mes=${comparison.month}&comparar=${comparison.compareTo}`;
   const selectedCategory = typeof categoria === "string" ? comparison.byCategory.find((row) => row.key === categoria) : undefined;
-  const categoryRecords = selectedCategory
-    ? comparison.records.filter((record) => (record.category?.slug ?? "sem-categoria") === selectedCategory.key && record.category?.kind !== "transfer")
-    : [];
+  const selectedNature =
+    !selectedCategory && typeof para === "string" ? comparison.byExpenseNature.find((row) => row.key === para) : undefined;
+  const selection = selectedCategory ?? selectedNature;
+  const consumptionRecords = comparison.records.filter((record) =>
+    ["spending", "refund"].includes(consumptionNature(record, comparison.billTotals)),
+  );
+  const selectionRecords = selectedCategory
+    ? consumptionRecords.filter((record) => (record.category?.slug ?? "sem-categoria") === selectedCategory.key)
+    : selectedNature
+      ? consumptionRecords.filter(
+          (record) => expenseNatureKey({ nature: record.expenseNature, memberId: record.expenseMemberId }) === selectedNature.key,
+        )
+      : [];
   const monthOptions = months.includes(comparison.month) ? months : [comparison.month, ...months];
   const compareOptions = months.includes(comparison.compareTo) ? months : [...months, comparison.compareTo];
 
@@ -161,11 +172,19 @@ async function AnalysisContent({ searchParams }: Pick<PageProps<"/analise">, "se
       neutral: true,
     },
     { label: "Consumo sem categoria", current: current.uncategorizedCents, previous: previous.uncategorizedCents, money: true },
+    {
+      label: "Consumo sem definição de para quem",
+      current: current.undefinedNatureCents,
+      previous: previous.undefinedNatureCents,
+      money: true,
+    },
     { label: "Compras pendentes", current: current.pendingCount, previous: previous.pendingCount, money: false, neutral: true },
   ];
 
   const uncategorizedShare =
     current.consumptionCents > 0 ? (current.uncategorizedCents / current.consumptionCents) * 100 : 0;
+  const undefinedNatureShare =
+    current.consumptionCents > 0 ? (current.undefinedNatureCents / current.consumptionCents) * 100 : 0;
 
   return (
     <>
@@ -253,14 +272,29 @@ async function AnalysisContent({ searchParams }: Pick<PageProps<"/analise">, "se
           <p className="mt-4 text-xs text-muted-foreground">Clique numa categoria para ver as movimentações de {currentLabel}.</p>
         </Panel>
 
-        {selectedCategory && (
-          <Panel title={`Movimentações · ${selectedCategory.label} · ${currentLabel}`} icon={List}>
+        <Panel title="Para quem" icon={Users}>
+          <ComparisonTable
+            rows={comparison.byExpenseNature}
+            labelHead="Para quem"
+            currentLabel={currentLabel}
+            previousLabel={previousLabel}
+            hrefFor={(row) => `/analise?${baseQuery}&para=${row.key}#movimentacoes`}
+            activeKey={selectedNature?.key}
+          />
+          <p className="mt-4 text-xs text-muted-foreground">
+            Quem aproveitou o gasto: a casa, vocês juntos ou um integrante. Independe de quem pagou. Clique numa linha para ver
+            e ajustar as movimentações de {currentLabel}.
+          </p>
+        </Panel>
+
+        {selection && (
+          <Panel title={`Movimentações · ${selection.label} · ${currentLabel}`} icon={List}>
             <div id="movimentacoes" className="scroll-mt-24">
-              {categoryRecords.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nenhuma movimentação desta categoria em {currentLabel}.</p>
+              {selectionRecords.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhuma movimentação de {selection.label} em {currentLabel}.</p>
               ) : (
                 <ul className="flex flex-col divide-y">
-                  {categoryRecords.map((record) => (
+                  {selectionRecords.map((record) => (
                     <TransactionRow key={record.id} line={record} variant="statement" />
                   ))}
                 </ul>
@@ -270,10 +304,11 @@ async function AnalysisContent({ searchParams }: Pick<PageProps<"/analise">, "se
         )}
       </CategoryCorrectionProvider>
 
-      <Panel title="Por integrante" icon={List}>
-        <ComparisonTable rows={comparison.byMember} labelHead="Integrante" currentLabel={currentLabel} previousLabel={previousLabel} />
+      <Panel title="Por titular (quem pagou)" icon={List}>
+        <ComparisonTable rows={comparison.byMember} labelHead="Titular" currentLabel={currentLabel} previousLabel={previousLabel} />
         <p className="mt-4 text-xs text-muted-foreground">
-          Integrante titular da conta ou do cartão em que a compra foi feita. Não representa quem consumiu.
+          Integrante titular da conta ou do cartão em que a compra foi feita. Não representa quem consumiu; para isso, veja
+          Para quem.
         </p>
       </Panel>
 
@@ -308,6 +343,11 @@ async function AnalysisContent({ searchParams }: Pick<PageProps<"/analise">, "se
               {formatPercent(uncategorizedShare)} em {currentLabel} ({current.uncategorizedCount}{" "}
               {current.uncategorizedCount === 1 ? "compra" : "compras"})
             </dd>
+            <dt className="text-muted-foreground">Consumo sem para quem</dt>
+            <dd>
+              {formatPercent(undefinedNatureShare)} em {currentLabel} ({current.undefinedNatureCount}{" "}
+              {current.undefinedNatureCount === 1 ? "compra" : "compras"})
+            </dd>
             <dt className="text-muted-foreground">Compras pendentes</dt>
             <dd>{current.pendingCount} em {currentLabel}, podem mudar ou sumir na fonte</dd>
           </dl>
@@ -336,6 +376,12 @@ async function AnalysisContent({ searchParams }: Pick<PageProps<"/analise">, "se
               chegando no cartão. Os dois lados são mostrados separados e nunca somados.
             </li>
             <li>
+              <strong className="text-foreground">Para quem</strong>: Casa são despesas da residência (aluguel, contas,
+              mercado), Compartilhado é o que vocês aproveitam juntos e o nome é o gasto de um integrante só. Não divide
+              valores. Moradia, energia, água e supermercado entram como Casa automaticamente; o resto fica sem definição
+              até ser ajustado.
+            </li>
+            <li>
               <strong className="text-foreground">Ticket médio</strong>: valor das compras dividido pela quantidade, sem
               descontar estornos.
             </li>
@@ -350,7 +396,7 @@ async function AnalysisContent({ searchParams }: Pick<PageProps<"/analise">, "se
       <Panel title="Exportar dados" icon={Download}>
         <p className="text-sm text-muted-foreground">
           Arquivo CSV com uma linha por transação e todas as dimensões (data, valor, natureza, categoria e origem da
-          classificação, conta, integrante, estabelecimento, fatura e parcela), para planilhas, ferramentas de análise e o
+          classificação, para quem e participantes, conta, titular, estabelecimento, fatura e parcela), para planilhas, ferramentas de análise e o
           contador. O dicionário de dados está no README.
         </p>
         <form action="/api/exportacao" className="mt-5 flex flex-wrap items-end gap-4">

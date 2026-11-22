@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { ArrowDownLeft, ArrowRight, CreditCard, Landmark, PieChart, Plug } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, CreditCard, Landmark, PieChart, Plug, Users } from "lucide-react";
 import { AuthorizationNotice } from "@/components/authorization-notice";
 import { Change } from "@/components/change";
 import { Money } from "@/components/money";
@@ -9,6 +9,7 @@ import { Panel } from "@/components/panel";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { authorizationAlert } from "@/domain/authorization";
+import { UNDEFINED_NATURE_KEY } from "@/domain/expense-nature";
 import { fromCents } from "@/domain/money";
 import { formatDateTime, formatMonth, formatPeriod } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,8 @@ async function HomeContent() {
   const openBillsCents = [...cardBills.values()].reduce((total, bills) => total + bills.open.netCents, 0);
   const topCategories = current.byCategory.slice(0, TOP_CATEGORIES);
   const previousByCategory = new Map(previous.byCategory.map((entry) => [entry.key, entry.totalCents]));
+  const previousByNature = new Map(previous.byExpenseNature.map((entry) => [entry.key, entry.totalCents]));
+  const natures = current.byExpenseNature.filter((entry) => entry.key !== UNDEFINED_NATURE_KEY);
   const banks = connections.map((connection) => connection.institutionName ?? "Instituição");
 
   return (
@@ -163,6 +166,39 @@ async function HomeContent() {
               </Link>
             </Button>
           </Panel>
+
+          {current.consumptionCents > 0 && (
+            <Panel title="Para quem foi" icon={Users}>
+              {natures.length > 0 && (
+                <ul className="flex flex-col divide-y">
+                  {natures.map((entry) => (
+                    <li key={entry.key} className="flex items-center justify-between gap-4 py-2.5">
+                      <span className="min-w-0 truncate font-medium">{entry.label}</span>
+                      <span className="flex shrink-0 items-baseline gap-3">
+                        <Change current={entry.totalCents} previous={previousByNature.get(entry.key) ?? 0} className="text-xs" />
+                        <Money value={fromCents(entry.totalCents)} className="font-semibold" />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {current.undefinedNatureCents > 0 && (
+                <p className={cn("text-sm text-muted-foreground", natures.length > 0 && "mt-4")}>
+                  <Money value={fromCents(current.undefinedNatureCents)} className="font-medium text-foreground" /> ainda sem
+                  definição.{" "}
+                  <Link
+                    href={`/analise?para=${UNDEFINED_NATURE_KEY}#movimentacoes`}
+                    className="font-medium text-primary underline-offset-4 hover:underline"
+                  >
+                    Definir agora
+                  </Link>
+                </p>
+              )}
+              <p className="mt-4 text-xs text-muted-foreground">
+                Casa são as despesas da residência, Compartilhado é o que vocês aproveitam juntos. Não importa quem pagou.
+              </p>
+            </Panel>
+          )}
         </>
       ) : (
         <Panel title="Seus gastos" icon={PieChart}>
