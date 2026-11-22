@@ -231,6 +231,16 @@ Uma meta é um limite mensal de consumo, por categoria e por para quem (ou para 
 - Metas são versionadas por mês: editar num mês seguinte encerra a meta antiga no mês anterior e cria uma nova, preservando o histórico dos meses passados. Editar ou remover no mês de criação altera ou apaga a própria meta.
 - Só pode existir uma meta ativa por categoria e para quem.
 
+## Histórico de alterações
+
+Toda mudança feita por uma pessoa fica registrada em `change_log` e aparece em `/historico` (atalho nas telas Contas e Metas), com filtro por Classificação e Metas.
+
+- Registra quem alterou, quando, o item (estabelecimento ou meta), o valor anterior, o novo valor e o alcance da correção.
+- Classificação: categoria e "para quem". Nas correções com regra, o valor anterior é o da transação clicada e a contagem informa quantas transações foram afetadas, incluindo o histórico do estabelecimento.
+- Metas: criação, alteração (com o limite e os avisos anteriores) e remoção ou encerramento.
+- O registro é gravado na mesma transação do banco da mudança: se uma falha, a outra também. Correções recusadas não geram registro.
+- Alterações automáticas da sincronização e das regras não entram aqui, só o que uma pessoa fez. Os valores ficam como texto, então o histórico continua legível se uma categoria ou meta mudar depois.
+
 ## Indicadores e análise
 
 ### Definições

@@ -18,6 +18,7 @@ import {
 } from "@/domain/expense-nature";
 import { UUID_PATTERN, type ActionResult } from "./connections";
 import type { CorrectionScope } from "./categorization";
+import { recordChange } from "./change-log";
 
 type Db = ReturnType<typeof getDb>;
 type Executor = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
@@ -138,7 +139,13 @@ export async function correctExpenseNature(
   }
 
   const [transaction] = await db
-    .select({ id: transactions.id, merchantName: transactions.merchantName, description: transactions.description })
+    .select({
+      id: transactions.id,
+      merchantName: transactions.merchantName,
+      description: transactions.description,
+      expenseNature: transactions.expenseNature,
+      expenseMemberId: transactions.expenseMemberId,
+    })
     .from(transactions)
     .where(and(eq(transactions.id, transactionId), inArray(transactions.accountId, householdAccountIds(member.householdId))));
   if (!transaction) {
@@ -152,16 +159,36 @@ export async function correctExpenseNature(
     memberName: members.find((m) => m.id === assignment?.memberId)?.displayName ?? null,
   });
 
+  const previousLabel = expenseNatureLabel({
+    nature: transaction.expenseNature,
+    memberId: transaction.expenseMemberId,
+    memberName: members.find((m) => m.id === transaction.expenseMemberId)?.displayName ?? null,
+  });
+  const logChange = (executor: Parameters<typeof recordChange>[0], affectedCount: number) =>
+    recordChange(executor, {
+      householdId: member.householdId,
+      memberId: member.memberId,
+      kind: "expense_changed",
+      subject: merchant,
+      scope,
+      previousValue: previousLabel,
+      newValue: label,
+      affectedCount,
+    });
+
   if (scope === "transaction") {
-    await db
-      .update(transactions)
-      .set({
-        expenseNature: assignment?.nature ?? null,
-        expenseMemberId: assignment?.memberId ?? null,
-        expenseNatureSource: "user",
-        updatedAt: new Date(),
-      })
-      .where(eq(transactions.id, transaction.id));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(transactions)
+        .set({
+          expenseNature: assignment?.nature ?? null,
+          expenseMemberId: assignment?.memberId ?? null,
+          expenseNatureSource: "user",
+          updatedAt: new Date(),
+        })
+        .where(eq(transactions.id, transaction.id));
+      await logChange(tx, 1);
+    });
     return { ok: true, message: `Para quem alterado para ${label} somente nesta transação.` };
   }
 
@@ -193,6 +220,7 @@ export async function correctExpenseNature(
       .where(eq(transactions.id, transaction.id));
 
     if (scope !== "merchant_history") {
+      await logChange(tx, 1);
       return 0;
     }
     const updated = await tx
@@ -207,6 +235,7 @@ export async function correctExpenseNature(
         ),
       )
       .returning({ id: transactions.id });
+    await logChange(tx, updated.length + 1);
     return updated.length;
   });
 

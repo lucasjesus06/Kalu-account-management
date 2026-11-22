@@ -190,7 +190,15 @@ async function AccountsContent() {
 export default function AccountsPage() {
   return (
     <div className="flex flex-col gap-8">
-      <PageHeader title="Contas" description="Saldos e limites das contas conectadas." />
+      <PageHeader
+        title="Contas"
+        description="Saldos e limites das contas conectadas."
+        action={
+          <Button asChild variant="outline">
+            <Link href="/historico">Histórico de alterações</Link>
+          </Button>
+        }
+      />
       <Suspense fallback={<p className="text-muted-foreground">Carregando…</p>}>
         <AccountsContent />
       </Suspense>

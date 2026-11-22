@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import { BellRing, Plus, Target } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
@@ -54,6 +55,11 @@ async function GoalsContent({ searchParams }: Pick<PageProps<"/metas">, "searchP
       <PageHeader
         title="Metas"
         description="Limites de gasto por mês. O Kalu avisa quando o consumo chega perto ou passa do limite."
+        action={
+          <Button asChild variant="outline">
+            <Link href="/historico">Histórico de alterações</Link>
+          </Button>
+        }
       />
 
       <section className="flex flex-col gap-4 rounded-2xl border bg-card p-5 sm:p-6">
