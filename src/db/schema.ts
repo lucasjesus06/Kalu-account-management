@@ -107,6 +107,7 @@ export const categories = pgTable("categories", {
   id: uuid("id").primaryKey().defaultRandom(),
   slug: text("slug").notNull().unique(),
   name: text("name").notNull(),
+  kind: text("kind", { enum: ["expense", "transfer"] }).notNull().default("expense"),
   sortOrder: integer("sort_order").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS();

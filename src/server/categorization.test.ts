@@ -85,7 +85,7 @@ describe("correção de categoria", () => {
   it("lista as categorias na ordem do catálogo", async () => {
     const list = await listCategories();
     expect(list[0].name).toBe("Moradia");
-    expect(list).toHaveLength(25);
+    expect(list).toHaveLength(27);
   });
 
   it("somente nesta transação: marca como escolha do usuário e não cria regra", async () => {

@@ -9,10 +9,10 @@ describe("categorias iniciais", () => {
     const db = await createTestDatabase();
 
     const stored = await db
-      .select({ slug: categoriesTable.slug, name: categoriesTable.name })
+      .select({ slug: categoriesTable.slug, name: categoriesTable.name, kind: categoriesTable.kind })
       .from(categoriesTable)
       .orderBy(asc(categoriesTable.sortOrder));
 
-    expect(stored).toEqual(categories.map(({ slug, name }) => ({ slug, name })));
+    expect(stored).toEqual(categories.map(({ slug, name, kind }) => ({ slug, name, kind })));
   });
 });
