@@ -120,6 +120,13 @@
       "when": 1795371030887,
       "tag": "0016_historico_de_alteracoes",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795372167432,
+      "tag": "0017_push_dos_avisos",
+      "breakpoints": true
     }
   ]
 }
