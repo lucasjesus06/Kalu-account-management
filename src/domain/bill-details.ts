@@ -1,11 +1,12 @@
 import { BILL_PAYMENT_TOLERANCE_CENTS, classifyCardTransaction, type CardTransaction } from "./bills";
+import type { CategoryKind } from "./categories";
 import type { Cents } from "./money";
 
 export type BillLine = CardTransaction & {
   id: string;
   occurredAt: Date;
   merchantName: string | null;
-  category: { slug: string; name: string } | null;
+  category: { slug: string; name: string; kind: CategoryKind } | null;
   categorySource: "automatic" | "rule" | "user" | null;
   installmentNumber: number | null;
   installmentTotal: number | null;
@@ -14,6 +15,7 @@ export type BillLine = CardTransaction & {
 export type CategoryGroup = {
   slug: string | null;
   name: string;
+  kind: CategoryKind | null;
   netCents: Cents;
   count: number;
   lines: BillLine[];
@@ -50,6 +52,7 @@ export function groupByCategory(lines: readonly BillLine[], billTotals: readonly
     const group = groups.get(key) ?? {
       slug: line.category?.slug ?? null,
       name: line.category?.name ?? UNCATEGORIZED,
+      kind: line.category?.kind ?? null,
       netCents: 0,
       count: 0,
       lines: [],
@@ -62,19 +65,15 @@ export function groupByCategory(lines: readonly BillLine[], billTotals: readonly
   for (const group of groups.values()) {
     group.lines.sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime());
   }
-  return [...groups.values()].sort((a, b) => {
-    if ((a.slug === null) !== (b.slug === null)) {
-      return a.slug === null ? 1 : -1;
-    }
-    return b.netCents - a.netCents;
-  });
+  const order = (group: CategoryGroup) => (group.kind === "expense" ? 0 : group.kind === null ? 1 : 2);
+  return [...groups.values()].sort((a, b) => order(a) - order(b) || b.netCents - a.netCents);
 }
 
 export function topMerchants(lines: readonly BillLine[], billTotals: readonly Cents[], limit = 5): MerchantTotal[] {
   const totals = new Map<string, MerchantTotal>();
   for (const line of lines) {
     const amount = signedAmount(line, billTotals);
-    if (amount === null) {
+    if (amount === null || line.category?.kind === "transfer") {
       continue;
     }
     const name = line.merchantName ?? line.description;

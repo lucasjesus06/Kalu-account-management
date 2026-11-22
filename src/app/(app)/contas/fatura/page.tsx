@@ -8,7 +8,7 @@ import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/panel";
 import { StatCard } from "@/components/stat-card";
 import { StatusBadge } from "@/components/status-badge";
-import type { BillLine } from "@/domain/bill-details";
+import type { BillLine, CategoryGroup } from "@/domain/bill-details";
 import { fromCents } from "@/domain/money";
 import { formatDate, formatIsoDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -66,6 +66,44 @@ function TransactionRow({ line }: { line: BillLine }) {
   );
 }
 
+function CategoryGroupItem({ group, base }: { group: CategoryGroup; base: number }) {
+  const percent = base > 0 ? Math.max(0, Math.round((group.netCents / base) * 100)) : 0;
+  return (
+    <li>
+      <details className="group">
+        <summary className="flex cursor-pointer list-none flex-col gap-2 py-3 [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center justify-between gap-4">
+            <span className={cn("min-w-0 truncate font-medium", group.slug === null && "text-muted-foreground")}>
+              {group.name}
+            </span>
+            <span className="flex shrink-0 items-baseline gap-2">
+              <span className="text-xs text-muted-foreground">{percent}%</span>
+              <Money value={fromCents(group.netCents)} className="font-semibold" />
+            </span>
+          </span>
+          <span className="h-1.5 overflow-hidden rounded-full bg-secondary" role="presentation">
+            <span
+              className={cn("block h-full rounded-full", group.kind === "transfer" ? "bg-muted-foreground/50" : "bg-primary")}
+              style={{ width: `${percent}%` }}
+            />
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {plural(group.count, "transação", "transações")}
+            {group.kind === "transfer" && " · não entra no consumo"} ·{" "}
+            <span className="group-open:hidden">ver transações</span>
+            <span className="hidden group-open:inline">ocultar</span>
+          </span>
+        </summary>
+        <ul className="mb-3 flex flex-col divide-y rounded-xl bg-secondary/40 px-4">
+          {group.lines.map((line) => (
+            <TransactionRow key={line.id} line={line} />
+          ))}
+        </ul>
+      </details>
+    </li>
+  );
+}
+
 async function BillContent({ searchParams }: Pick<PageProps<"/contas/fatura">, "searchParams">) {
   const member = await getCurrentMember();
   if (!member) {
@@ -85,6 +123,8 @@ async function BillContent({ searchParams }: Pick<PageProps<"/contas/fatura">, "
   const composition = selected.composition;
   const base = selected.isOpen ? composition.netCents : Math.max(selected.composition.officialTotalCents, composition.netCents);
   const unidentifiedCents = selected.isOpen ? 0 : selected.composition.unidentifiedCents;
+  const spendingGroups = detail.categories.filter((group) => group.kind !== "transfer");
+  const transferGroups = detail.categories.filter((group) => group.kind === "transfer");
 
   return (
     <>
@@ -213,39 +253,9 @@ async function BillContent({ searchParams }: Pick<PageProps<"/contas/fatura">, "
               <p className="text-muted-foreground">Nenhuma compra neste ciclo.</p>
             ) : (
               <ul className="flex flex-col divide-y">
-                {detail.categories.map((group) => {
-                  const percent = base > 0 ? Math.max(0, Math.round((group.netCents / base) * 100)) : 0;
-                  return (
-                    <li key={group.slug ?? "sem-categoria"}>
-                      <details className="group">
-                        <summary className="flex cursor-pointer list-none flex-col gap-2 py-3 [&::-webkit-details-marker]:hidden">
-                          <span className="flex items-center justify-between gap-4">
-                            <span className={cn("min-w-0 truncate font-medium", group.slug === null && "text-muted-foreground")}>
-                              {group.name}
-                            </span>
-                            <span className="flex shrink-0 items-baseline gap-2">
-                              <span className="text-xs text-muted-foreground">{percent}%</span>
-                              <Money value={fromCents(group.netCents)} className="font-semibold" />
-                            </span>
-                          </span>
-                          <span className="h-1.5 overflow-hidden rounded-full bg-secondary" role="presentation">
-                            <span className="block h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
-                          </span>
-                          <span className="text-xs text-muted-foreground">
-                            {plural(group.count, "transação", "transações")} ·{" "}
-                            <span className="group-open:hidden">ver transações</span>
-                            <span className="hidden group-open:inline">ocultar</span>
-                          </span>
-                        </summary>
-                        <ul className="mb-3 flex flex-col divide-y rounded-xl bg-secondary/40 px-4">
-                          {group.lines.map((line) => (
-                            <TransactionRow key={line.id} line={line} />
-                          ))}
-                        </ul>
-                      </details>
-                    </li>
-                  );
-                })}
+                {spendingGroups.map((group) => (
+                  <CategoryGroupItem key={group.slug ?? "sem-categoria"} group={group} base={base} />
+                ))}
                 {unidentifiedCents > 0 && (
                   <li className="flex flex-col gap-2 py-3">
                     <span className="flex items-center justify-between gap-4">
@@ -263,6 +273,14 @@ async function BillContent({ searchParams }: Pick<PageProps<"/contas/fatura">, "
                     </span>
                   </li>
                 )}
+                {transferGroups.length > 0 && (
+                  <li className="pt-5 pb-1 text-xs font-semibold tracking-wider text-muted-foreground uppercase">
+                    Transferências
+                  </li>
+                )}
+                {transferGroups.map((group) => (
+                  <CategoryGroupItem key={group.slug} group={group} base={base} />
+                ))}
               </ul>
             )}
           </Panel>

@@ -8,8 +8,9 @@ import {
   type BillLine,
 } from "./bill-details";
 
-const restaurantes = { slug: "restaurantes", name: "Restaurantes e delivery" };
-const mercado = { slug: "supermercado", name: "Supermercado" };
+const restaurantes = { slug: "restaurantes", name: "Restaurantes e delivery", kind: "expense" as const };
+const mercado = { slug: "supermercado", name: "Supermercado", kind: "expense" as const };
+const transferencia = { slug: "transferencia-entre-integrantes", name: "Transferência entre integrantes", kind: "transfer" as const };
 
 let sequence = 0;
 function line(amountCents: number, overrides: Partial<BillLine> = {}): BillLine {
@@ -41,18 +42,20 @@ const lines = [
   line(3000, { merchantName: "LOJA DESCONHECIDA" }),
   line(12000, { category: mercado, merchantName: "ASSAI", installmentNumber: 1, installmentTotal: 3 }),
   line(5000, { merchantName: "LOJA PARCELADA", installmentNumber: 3, installmentTotal: 3 }),
+  line(60000, { category: transferencia, merchantName: "KARINA" }),
   payment,
 ];
 const totals = [636517];
 
 describe("distribuição por categoria", () => {
-  it("soma compras menos créditos por categoria, da maior para a menor, com sem categoria por último", () => {
+  it("soma por categoria: consumo do maior para o menor, depois sem categoria e por fim transferências", () => {
     const groups = groupByCategory(lines, totals);
 
-    expect(groups.map((g) => [g.name, g.netCents, g.count])).toEqual([
-      ["Supermercado", 47000, 3],
-      ["Restaurantes e delivery", 2500, 2],
-      ["Sem categoria", 8000, 2],
+    expect(groups.map((g) => [g.name, g.kind, g.netCents, g.count])).toEqual([
+      ["Supermercado", "expense", 47000, 3],
+      ["Restaurantes e delivery", "expense", 2500, 2],
+      ["Sem categoria", null, 8000, 2],
+      ["Transferência entre integrantes", "transfer", 60000, 1],
     ]);
   });
 
@@ -71,7 +74,7 @@ describe("distribuição por categoria", () => {
 });
 
 describe("estabelecimentos com maior participação", () => {
-  it("agrupa pelo estabelecimento normalizado e desconta créditos", () => {
+  it("agrupa pelo estabelecimento normalizado, desconta créditos e ignora transferências", () => {
     expect(topMerchants(lines, totals, 3)).toEqual([
       { name: "CARREFOUR", netCents: 25000, count: 1 },
       { name: "ASSAI", netCents: 22000, count: 2 },
