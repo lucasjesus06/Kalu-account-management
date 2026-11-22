@@ -6,6 +6,15 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Kalu",
   description: "Finanças da casa em um só lugar",
+  applicationName: "Kalu",
+  appleWebApp: {
+    capable: true,
+    title: "Kalu",
+    statusBarStyle: "black",
+  },
+  formatDetection: {
+    telephone: false,
+  },
 };
 
 export const viewport: Viewport = {
