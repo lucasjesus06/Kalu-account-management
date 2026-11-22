@@ -125,6 +125,16 @@ No plano Hobby a Vercel executa o agendamento uma vez por dia, em algum momento 
 curl -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/sync
 ```
 
+### Notificações da Pluggy (webhooks)
+
+Com as notificações ativas, o Kalu sincroniza assim que a Pluggy avisa que algo mudou, sem esperar o agendamento diário (que continua como garantia).
+
+- **Rota**: `POST /api/webhooks/pluggy`, pública no proxy. Ela responde em seguida (a Pluggy espera resposta 2xx em até 10 segundos) e processa depois da resposta, com `after()` do Next.js.
+- **Autenticidade**: toda notificação precisa trazer o cabeçalho `X-Kalu-Webhook-Secret` com o valor de `PLUGGY_WEBHOOK_SECRET`, cadastrado na Pluggy junto com o webhook. Se `PLUGGY_WEBHOOK_SIGNING_SECRET` estiver configurado (segredo `whsec_...` gerado no Dashboard), a assinatura `X-Pluggy-Signature` (HMAC-SHA256 de `t.corpo`, com no máximo 5 minutos de diferença) também é exigida. Sem isso, a resposta é `401`, que a Pluggy não reenvia. O `clientId` da notificação precisa ser o das credenciais do integrante dono do item.
+- **Eventos**: `item/created`, `item/updated`, `item/error` e `transactions/*` disparam a sincronização da conexão (que consulta a Pluggy com a chave da API e detecta autorização expirada); `item/deleted` marca a conexão como revogada; os demais são ignorados.
+- **Sem repetição**: cada notificação fica em `webhook_events` pelo `eventId`, com o resultado (`synced`, `revoked`, `ignored` ou `failed`) e o detalhe. Uma entrega repetida não é processada de novo.
+- **Ativação**: em **Conexões**, **Ativar notificações** cadastra o webhook na Pluggy (evento `all`, com o segredo nos cabeçalhos) ou atualiza e reativa o que já aponta para o Kalu. Exige o Kalu publicado em HTTPS (`APP_URL` ou o domínio de produção da Vercel). A tela mostra desde quando estão ativas e a última notificação recebida.
+
 ### Validade da autorização
 
 A autorização dada no Meu Pluggy vale um ano. O Kalu guarda a data de vencimento de cada conexão (a informada pela Pluggy ou, na falta dela, um ano depois do cadastro) e avisa no Início e em Conexões quando faltam 30 dias ou menos, em vermelho a partir de 7 dias.
@@ -272,6 +282,9 @@ Os testes de integração rodam contra um PostgreSQL em memória ([PGlite](https
 | `DATABASE_URL` | Conexão da aplicação com o PostgreSQL, pelo pooler do Supabase em modo transação (porta 6543) |
 | `DATABASE_MIGRATION_URL` | Conexão usada pelas migrations, pelo pooler do Supabase em modo sessão (porta 5432) |
 | `ENCRYPTION_KEY` | Chave de criptografia das credenciais da Pluggy |
+| `APP_URL` | Endereço público do Kalu, usado no cadastro do webhook. Na Vercel, se vazio, usa o domínio de produção |
+| `PLUGGY_WEBHOOK_SECRET` | Segredo que a Pluggy envia em cada notificação |
+| `PLUGGY_WEBHOOK_SIGNING_SECRET` | Opcional: segredo de assinatura gerado no Dashboard da Pluggy |
 | `CRON_SECRET` | Protege a rota da sincronização diária. Gere com `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` e configure na Vercel |
 | `PLUGGY_API_URL` | Opcional. Endereço da API da Pluggy; vazio usa `https://api.pluggy.ai`. Serve para apontar para um servidor simulado em testes |
 
