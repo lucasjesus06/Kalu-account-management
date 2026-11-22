@@ -202,6 +202,25 @@ Na sincronização, a regra da residência vem antes das regras automáticas. As
 
 A sincronização categoriza só as transações ainda não avaliadas, então mudar uma regra não reescreve o histórico. Uma transação categorizada automaticamente volta a ser avaliada apenas se a descrição ou a categoria da fonte mudar. Classificações feitas pelo usuário nunca são alteradas pela sincronização. A tela Contas mostra a porcentagem das compras de cada cartão que têm categoria.
 
+## Para quem é o gasto
+
+Além da categoria (em que o dinheiro foi gasto), cada gasto pode dizer para quem ele foi. É independente de quem pagou: uma compra de mercado no cartão do Lucas continua sendo da Casa.
+
+- **Casa** (`household`): despesas da residência, como aluguel, contas e mercado.
+- **Compartilhado** (`shared`): o que os integrantes aproveitam juntos, como um restaurante ou uma assinatura dos dois.
+- **Um integrante** (`individual`): o gasto de uma pessoa só, guardado com o integrante.
+- **Sem definição**: ainda não informado.
+
+Marcar um gasto como Compartilhado ou Casa não divide o valor entre os integrantes.
+
+Cada transação guarda `expense_nature`, `expense_member_id` (só para `individual`) e `expense_nature_source` (`automatic`, `rule` ou `user`; vazio significa ainda não avaliada). A avaliação automática é determinística e não inventa a informação:
+
+1. Regra da residência para o estabelecimento (tabela `expense_nature_rules`).
+2. Na falta dela, as categorias Moradia, Energia elétrica, Água e Supermercado viram **Casa** (`src/domain/expense-nature.ts`).
+3. Nos demais casos, o gasto fica **Sem definição**. Quem pagou nunca é usado para presumir quem consumiu. Transferências não têm para quem.
+
+A correção usa o mesmo botão **Alterar** da categoria, com as mesmas três opções de alcance. Assim como na categoria, a sincronização avalia só as transações novas, reavalia quando a descrição muda na fonte e nunca altera a escolha do usuário. Quando a categoria muda, um "para quem" automático é recalculado; um vindo de regra ou do usuário é mantido.
+
 ## Indicadores e análise
 
 ### Definições
@@ -215,12 +234,13 @@ Todas as telas usam as mesmas definições, em `src/domain/consumption.ts`:
 - **Períodos comparáveis**: o mês em andamento é comparado com o mesmo intervalo de dias do mês comparado (ex.: 01/11 a 22/11 contra 01/10 a 22/10). Meses encerrados são comparados inteiros.
 - **Ticket médio**: valor das compras dividido pela quantidade, sem descontar estornos.
 - **Variação**: diferença sobre o período comparado, sem cálculo quando o período comparado é zero.
-- **Integrante**: titular da conta ou do cartão em que a compra foi feita, que não é necessariamente quem consumiu.
+- **Titular**: integrante dono da conta ou do cartão em que a compra foi feita, que não é necessariamente quem consumiu.
+- **Para quem**: Casa, Compartilhado, um integrante ou Sem definição. Estornos abatem do mesmo grupo da compra.
 
 ### Telas
 
-- **Início**: visão do dia a dia, com o consumo do mês comparado ao mesmo período do mês anterior, entradas, saldo em contas, faturas abertas com o limite usado e as maiores categorias com a variação. Mostra o período e a última sincronização.
-- **Análise detalhada** (`/analise?mes=AAAA-MM&comparar=AAAA-MM`): comparação entre dois períodos com os indicadores, consumo por categoria (cada categoria abre as movimentações), por integrante, por origem e por estabelecimento, a qualidade dos dados (histórico disponível, consumo sem categoria, compras pendentes, última sincronização), as definições e a exportação.
+- **Início**: visão do dia a dia, com o consumo do mês comparado ao mesmo período do mês anterior, entradas, saldo em contas, faturas abertas com o limite usado, as maiores categorias e para quem foi o consumo, com a variação. Mostra o período, a última sincronização e quanto ainda está sem definição de para quem, com um atalho para definir.
+- **Análise detalhada** (`/analise?mes=AAAA-MM&comparar=AAAA-MM`): comparação entre dois períodos com os indicadores, consumo por categoria e por para quem (cada linha abre as movimentações, que podem ser ajustadas ali), por titular, por origem e por estabelecimento, a qualidade dos dados (histórico disponível, consumo sem categoria, consumo sem para quem, compras pendentes, última sincronização), as definições e a exportação.
 
 ### Exportação
 
@@ -243,10 +263,13 @@ Todas as telas usam as mesmas definições, em `src/domain/consumption.ts`:
 | `tipo_categoria` | `consumo` ou `transferencia` |
 | `origem_categoria` | `automatica`, `regra` (regra da residência) ou `usuario` (ajuste manual) |
 | `categoria_fonte` | Categoria informada pela Pluggy |
+| `para_quem` | `domestica` (Casa), `compartilhada` ou `individual`; vazio quando sem definição |
+| `participantes` | Integrantes envolvidos, separados por `\|`: todos para `domestica` e `compartilhada`, o integrante para `individual` |
+| `origem_para_quem` | `automatica`, `regra` ou `usuario` |
 | `conta` | Nome da conta ou do cartão |
 | `tipo_conta` | `conta_corrente`, `poupanca`, `cartao_credito` ou `outra` |
 | `instituicao` | Banco |
-| `integrante` | Titular da conta ou do cartão |
+| `titular` | Titular da conta ou do cartão (quem pagou), que não é necessariamente quem consumiu |
 | `fatura_vencimento` | Vencimento da fatura em que a compra foi cobrada (cartão) |
 | `parcela`, `total_parcelas` | Número da parcela e quantidade de parcelas |
 
