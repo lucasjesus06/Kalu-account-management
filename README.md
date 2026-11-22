@@ -273,9 +273,20 @@ Cada pessoa tem o próprio espaço financeiro e usa o Kalu sem criar residência
 - A migração 0019 compartilha as contas já existentes com a residência atual do titular. As conectadas depois começam privadas.
 - Nada pressupõe que os integrantes de uma residência sejam casados ou parentes.
 
+## Residências
+
+Uma residência é criada à mão por quem quiser e reúne só o que os integrantes decidirem compartilhar. Fica em `/residencias` (ícone no cabeçalho).
+
+- Quem cria vira o administrador. Cada residência tem um administrador (índice único parcial) e os demais são integrantes. Uma pessoa pode participar de várias e usar o Kalu sem nenhuma.
+- O administrador gera um link de convite, que vale por 7 dias e serve para uma entrada só. O banco guarda apenas o hash (SHA-256) do código, então o link aparece uma vez, na hora de gerar. Convites pendentes podem ser cancelados.
+- Abrir o link sem sessão leva ao login e volta para o convite (`/login?next=`, só caminhos internos). Entrar não compartilha conta nenhuma e não dá acesso às contas de ninguém, cada pessoa escolhe depois em Conexões.
+- Quem sai, ou é removido pelo administrador, leva as contas que compartilhou de volta ao espaço privado, sem perder dados. O administrador precisa passar a administração antes de sair. O último integrante que sai encerra a residência, com metas, regras e histórico dela, e as contas continuam com os titulares.
+- Entrada, saída, remoção e troca de administrador entram no histórico da residência, no filtro Integrantes.
+- Não há grau de parentesco: qualquer integrante pode virar administrador.
+
 ## Histórico de alterações
 
-Toda mudança feita por uma pessoa fica registrada em `change_log` e aparece em `/historico` (atalho nas telas Contas e Metas), com filtro por Classificação, Metas e Compartilhamento.
+Toda mudança feita por uma pessoa fica registrada em `change_log` e aparece em `/historico` (atalho nas telas Contas e Metas), com filtro por Classificação, Metas, Compartilhamento e Integrantes.
 
 - Registra quem alterou, quando, o item (estabelecimento ou meta), o valor anterior, o novo valor e o alcance da correção.
 - Classificação: categoria e "para quem". Nas correções com regra, o valor anterior é o da transação clicada e a contagem informa quantas transações foram afetadas, incluindo o histórico do estabelecimento.
