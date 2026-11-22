@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, count, eq, inArray } from "drizzle-orm";
+import { asc, count, eq, inArray, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   creditCardBills,
@@ -39,7 +39,15 @@ export async function listHouseholdAccounts(householdId: string) {
   const ids = accounts.map((account) => account.id);
   const [transactionCounts, billCounts] = await Promise.all([
     db
-      .select({ accountId: transactions.accountId, total: count() })
+      .select({
+        accountId: transactions.accountId,
+        total: count(),
+        spending: sql<number>`count(*) filter (where ${transactions.direction} = 'outflow')`.mapWith(Number),
+        categorizedSpending:
+          sql<number>`count(*) filter (where ${transactions.direction} = 'outflow' and ${transactions.categoryId} is not null)`.mapWith(
+            Number,
+          ),
+      })
       .from(transactions)
       .where(inArray(transactions.accountId, ids))
       .groupBy(transactions.accountId),
@@ -50,12 +58,14 @@ export async function listHouseholdAccounts(householdId: string) {
       .groupBy(creditCardBills.accountId),
   ]);
 
-  const transactionsByAccount = new Map(transactionCounts.map((row) => [row.accountId, row.total]));
+  const transactionsByAccount = new Map(transactionCounts.map((row) => [row.accountId, row]));
   const billsByAccount = new Map(billCounts.map((row) => [row.accountId, row.total]));
 
   return accounts.map((account) => ({
     ...account,
-    transactionsCount: transactionsByAccount.get(account.id) ?? 0,
+    transactionsCount: transactionsByAccount.get(account.id)?.total ?? 0,
+    spendingCount: transactionsByAccount.get(account.id)?.spending ?? 0,
+    categorizedSpendingCount: transactionsByAccount.get(account.id)?.categorizedSpending ?? 0,
     billsCount: billsByAccount.get(account.id) ?? 0,
   }));
 }

@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { asc, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  categories,
   creditCardBills,
   financialAccounts,
   integrationConnections,
@@ -289,10 +290,18 @@ describe("listHouseholdAccounts", () => {
     const accounts = await listHouseholdAccounts(householdId);
 
     expect(
-      accounts.map((a) => ({ kind: a.kind, owner: a.ownerName, bank: a.institutionName, tx: a.transactionsCount, bills: a.billsCount })),
+      accounts.map((a) => ({
+        kind: a.kind,
+        owner: a.ownerName,
+        bank: a.institutionName,
+        tx: a.transactionsCount,
+        bills: a.billsCount,
+        spending: a.spendingCount,
+        categorized: a.categorizedSpendingCount,
+      })),
     ).toEqual([
-      { kind: "checking", owner: "Lucas", bank: "Santander", tx: 2, bills: 0 },
-      { kind: "credit_card", owner: "Lucas", bank: "Santander", tx: 8, bills: 2 },
+      { kind: "checking", owner: "Lucas", bank: "Santander", tx: 2, bills: 0, spending: 1, categorized: 0 },
+      { kind: "credit_card", owner: "Lucas", bank: "Santander", tx: 8, bills: 2, spending: 5, categorized: 5 },
     ]);
   });
 
@@ -451,5 +460,84 @@ describe("listHouseholdCardBills", () => {
     const outra = await seedHousehold(db());
 
     expect((await listHouseholdCardBills(outra.household.id)).size).toBe(0);
+  });
+});
+
+describe("categorização na sincronização", () => {
+  async function categoryOf(externalId: string) {
+    const [row] = await db()
+      .select({
+        merchantName: transactions.merchantName,
+        category: categories.slug,
+        source: transactions.categorySource,
+      })
+      .from(transactions)
+      .leftJoin(categories, eq(categories.id, transactions.categoryId))
+      .where(eq(transactions.externalId, externalId));
+    return row;
+  }
+
+  async function setCategory(externalId: string, slug: string, source: "automatic" | "user") {
+    const [category] = await db().select().from(categories).where(eq(categories.slug, slug));
+    await db()
+      .update(transactions)
+      .set({ categoryId: category.id, categorySource: source })
+      .where(eq(transactions.externalId, externalId));
+  }
+
+  it("categoriza as transações importadas e guarda o estabelecimento", async () => {
+    await syncConnection(connectionId);
+
+    expect(await categoryOf(PENDING_ID)).toEqual({ merchantName: "UBER", category: "transporte-por-aplicativo", source: "automatic" });
+    expect(await categoryOf("aa11aa11-0000-4000-8000-000000000005")).toEqual({
+      merchantName: "COMPANHIA TESTE",
+      category: "restaurantes",
+      source: "automatic",
+    });
+    expect(await categoryOf("6af5f200-2ac8-4a62-909d-18faadb7dd62")).toMatchObject({ merchantName: "LOJA TESTE", category: "compras" });
+    expect(await categoryOf("aa11aa11-0000-4000-8000-000000000006")).toMatchObject({ category: "assinaturas" });
+  });
+
+  it("deixa sem categoria o pagamento de fatura, registrando que já foi avaliado", async () => {
+    await syncConnection(connectionId);
+
+    expect(await categoryOf("aa11aa11-0000-4000-8000-000000000002")).toEqual({
+      merchantName: "PAGAMENTO DE FATURA",
+      category: null,
+      source: "automatic",
+    });
+  });
+
+  it("não reclassifica o que já foi categorizado quando nada mudou", async () => {
+    await syncConnection(connectionId);
+    await setCategory(PENDING_ID, "outros", "automatic");
+
+    await syncConnection(connectionId);
+
+    expect(await categoryOf(PENDING_ID)).toMatchObject({ category: "outros", source: "automatic" });
+  });
+
+  it("reclassifica a categoria automática quando a descrição muda na fonte", async () => {
+    await syncConnection(connectionId);
+    await setCategory(PENDING_ID, "outros", "automatic");
+    fixtures.cardTransactions = fixtures.cardTransactions.map((t) =>
+      t.id === PENDING_ID ? { ...t, description: "DROGASIL 123" } : t,
+    );
+
+    await syncConnection(connectionId);
+
+    expect(await categoryOf(PENDING_ID)).toEqual({ merchantName: "DROGASIL 123", category: "farmacia", source: "automatic" });
+  });
+
+  it("nunca sobrescreve a categoria escolhida pelo usuário", async () => {
+    await syncConnection(connectionId);
+    await setCategory(PENDING_ID, "outros", "user");
+    fixtures.cardTransactions = fixtures.cardTransactions.map((t) =>
+      t.id === PENDING_ID ? { ...t, description: "DROGASIL 123" } : t,
+    );
+
+    await syncConnection(connectionId);
+
+    expect(await categoryOf(PENDING_ID)).toMatchObject({ category: "outros", source: "user" });
   });
 });
