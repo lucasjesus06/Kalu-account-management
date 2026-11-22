@@ -148,6 +148,13 @@
       "when": 1795378203042,
       "tag": "0020_convites_de_residencia",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795381755177,
+      "tag": "0021_regras_de_categoria_pessoais",
+      "breakpoints": true
     }
   ]
 }

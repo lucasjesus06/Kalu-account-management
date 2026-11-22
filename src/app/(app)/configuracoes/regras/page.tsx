@@ -12,72 +12,78 @@ export const metadata: Metadata = {
 };
 
 async function RulesContent() {
-  const { household } = await getCurrentContext();
-
-  const intro = (
-    <div className="flex flex-col gap-2">
-      <h2 className="font-display text-xl font-bold">Regras</h2>
-      <p className="max-w-prose text-muted-foreground">
-        Uma regra classifica sozinha as transações de um estabelecimento, hoje e nas próximas sincronizações. O que você ajusta à mão numa
-        transação sempre vale mais que uma regra.
-      </p>
-    </div>
-  );
-
-  if (!household) {
-    return (
-      <>
-        {intro}
-        <p className="text-muted-foreground">
-          As regras ficam dentro de uma residência. Escolha uma no seletor do topo ou{" "}
-          <Link href="/configuracoes/familia" className="font-medium text-primary underline-offset-4 hover:underline">
-            crie uma em Família
-          </Link>
-          .
-        </p>
-      </>
-    );
-  }
-
+  const { profile, household, scope } = await getCurrentContext();
   const [rules, categories, merchants] = await Promise.all([
-    listRules(household.householdId),
+    listRules(profile.memberId, household?.householdId ?? null),
     listCategories(),
-    listKnownMerchants(household.householdId),
+    listKnownMerchants(scope),
   ]);
 
   return (
     <>
-      {intro}
-      <p className="text-sm text-muted-foreground">Regras da residência {household.householdName}.</p>
+      <div className="flex flex-col gap-2">
+        <h2 className="font-display text-xl font-bold">Regras</h2>
+        <p className="max-w-prose text-muted-foreground">
+          Uma regra classifica sozinha as transações de um estabelecimento, hoje e nas próximas sincronizações. O que você ajusta à mão numa
+          transação sempre vale mais que uma regra, e suas regras pessoais valem mais que as da residência.
+        </p>
+      </div>
 
       <section className="flex flex-col gap-4">
-        <h3 className="font-display text-lg font-bold">Categoria</h3>
-        {rules.category.length === 0 ? (
-          <p className="text-muted-foreground">Nenhuma regra de categoria ainda. Toque em + para criar.</p>
+        <h3 className="font-display text-lg font-bold">Minhas regras de categoria</h3>
+        <p className="text-sm text-muted-foreground">Valem só nas contas que você conectou.</p>
+        {rules.personal.length === 0 ? (
+          <p className="text-muted-foreground">Nenhuma regra ainda. Toque em + para criar.</p>
         ) : (
           <ul className="flex flex-col divide-y">
-            {rules.category.map((rule) => (
-              <CategoryRuleRow key={rule.id} rule={rule} categories={categories} />
+            {rules.personal.map((rule) => (
+              <CategoryRuleRow key={rule.id} rule={rule} categories={categories} target="pessoal" />
             ))}
           </ul>
         )}
       </section>
 
-      <section className="flex flex-col gap-4 border-t pt-8">
-        <h3 className="font-display text-lg font-bold">Para quem</h3>
-        {rules.nature.length === 0 ? (
-          <p className="text-muted-foreground">Nenhuma regra de para quem ainda. Toque em + para criar.</p>
-        ) : (
-          <ul className="flex flex-col divide-y">
-            {rules.nature.map((rule) => (
-              <NatureRuleRow key={rule.id} rule={rule} members={rules.members} />
-            ))}
-          </ul>
-        )}
-      </section>
+      {household ? (
+        <>
+          <section className="flex flex-col gap-4 border-t pt-8">
+            <h3 className="font-display text-lg font-bold">Categoria na residência {household.householdName}</h3>
+            <p className="text-sm text-muted-foreground">Valem nas contas compartilhadas com a residência, exceto onde o dono tem regra própria.</p>
+            {rules.category.length === 0 ? (
+              <p className="text-muted-foreground">Nenhuma regra de categoria ainda.</p>
+            ) : (
+              <ul className="flex flex-col divide-y">
+                {rules.category.map((rule) => (
+                  <CategoryRuleRow key={rule.id} rule={rule} categories={categories} target="casa" />
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="flex flex-col gap-4 border-t pt-8">
+            <h3 className="font-display text-lg font-bold">Para quem na residência {household.householdName}</h3>
+            {rules.nature.length === 0 ? (
+              <p className="text-muted-foreground">Nenhuma regra de para quem ainda.</p>
+            ) : (
+              <ul className="flex flex-col divide-y">
+                {rules.nature.map((rule) => (
+                  <NatureRuleRow key={rule.id} rule={rule} members={rules.members} />
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      ) : (
+        <p className="border-t pt-8 text-muted-foreground">
+          Regras de para quem e regras compartilhadas existem dentro de uma residência.{" "}
+          <Link href="/configuracoes/familia" className="font-medium text-primary underline-offset-4 hover:underline">
+            Crie uma em Família
+          </Link>
+          .
+        </p>
+      )}
 
       <AddDialog label="Nova regra" title="Nova regra">
-        <NewRuleForm categories={categories} members={rules.members} merchants={merchants} />
+        <NewRuleForm categories={categories} members={rules.members} merchants={merchants} hasHousehold={Boolean(household)} />
       </AddDialog>
     </>
   );

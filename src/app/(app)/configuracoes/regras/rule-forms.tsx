@@ -48,7 +48,17 @@ function ExpenseOptions({ members }: { members: Member[] }) {
   );
 }
 
-export function NewRuleForm({ categories, members, merchants }: { categories: Category[]; members: Member[]; merchants: string[] }) {
+export function NewRuleForm({
+  categories,
+  members,
+  merchants,
+  hasHousehold,
+}: {
+  categories: Category[];
+  members: Member[];
+  merchants: string[];
+  hasHousehold: boolean;
+}) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(saveRuleAction, null);
   const [kind, setKind] = useState<"category" | "nature">("category");
   const close = useCloseAddDialog();
@@ -61,17 +71,21 @@ export function NewRuleForm({ categories, members, merchants }: { categories: Ca
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <fieldset className="flex gap-4 text-sm">
-        <legend className="mb-2 text-sm font-medium">O que a regra define</legend>
-        <label className="flex items-center gap-2">
-          <input type="radio" name="kind" value="category" checked={kind === "category"} onChange={() => setKind("category")} className="accent-primary" />
-          Categoria
-        </label>
-        <label className="flex items-center gap-2">
-          <input type="radio" name="kind" value="nature" checked={kind === "nature"} onChange={() => setKind("nature")} className="accent-primary" />
-          Para quem
-        </label>
-      </fieldset>
+      {hasHousehold ? (
+        <fieldset className="flex gap-4 text-sm">
+          <legend className="mb-2 text-sm font-medium">O que a regra define</legend>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="kind" value="category" checked={kind === "category"} onChange={() => setKind("category")} className="accent-primary" />
+            Categoria
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="kind" value="nature" checked={kind === "nature"} onChange={() => setKind("nature")} className="accent-primary" />
+            Para quem
+          </label>
+        </fieldset>
+      ) : (
+        <input type="hidden" name="kind" value="category" />
+      )}
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="rule-merchant">Estabelecimento</Label>
@@ -84,17 +98,31 @@ export function NewRuleForm({ categories, members, merchants }: { categories: Ca
       </div>
 
       {kind === "category" ? (
-        <div key="category" className="flex flex-col gap-2">
-          <Label htmlFor="rule-category">Categoria</Label>
-          <select id="rule-category" name="categoryId" required defaultValue="" className={selectClassName}>
-            <option value="" disabled>
-              Escolha
-            </option>
-            <CategoryOptions categories={categories} />
-          </select>
+        <div key="category" className="flex flex-col gap-4">
+          {hasHousehold ? (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="rule-target">Onde vale</Label>
+              <select id="rule-target" name="target" defaultValue="pessoal" className={selectClassName}>
+                <option value="pessoal">Só nas minhas contas</option>
+                <option value="casa">Em todas as contas da residência</option>
+              </select>
+            </div>
+          ) : (
+            <input type="hidden" name="target" value="pessoal" />
+          )}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="rule-category">Categoria</Label>
+            <select id="rule-category" name="categoryId" required defaultValue="" className={selectClassName}>
+              <option value="" disabled>
+                Escolha
+              </option>
+              <CategoryOptions categories={categories} />
+            </select>
+          </div>
         </div>
       ) : (
         <div key="nature" className="flex flex-col gap-2">
+          <input type="hidden" name="target" value="casa" />
           <Label htmlFor="rule-expense">Para quem</Label>
           <select id="rule-expense" name="expense" required defaultValue="" className={selectClassName}>
             <option value="" disabled>
@@ -122,6 +150,7 @@ export function NewRuleForm({ categories, members, merchants }: { categories: Ca
 
 function RuleRow({
   kind,
+  target,
   ruleId,
   merchant,
   value,
@@ -129,6 +158,7 @@ function RuleRow({
   children,
 }: {
   kind: "category" | "nature";
+  target: "pessoal" | "casa";
   ruleId: string;
   merchant: string;
   value: string;
@@ -151,6 +181,7 @@ function RuleRow({
         <div className="flex items-center gap-2">
           <form ref={changeRef} action={changeAction} className="flex-1 sm:w-56 sm:flex-none">
             <input type="hidden" name="kind" value={kind} />
+            <input type="hidden" name="target" value={target} />
             <input type="hidden" name="merchant" value={merchant} />
             <select
               key={value}
@@ -166,6 +197,7 @@ function RuleRow({
           </form>
           <form action={deleteAction} className="flex items-center gap-2">
             <input type="hidden" name="kind" value={kind} />
+            <input type="hidden" name="target" value={target} />
             <input type="hidden" name="ruleId" value={ruleId} />
             {confirming ? (
               <div key="confirmar" className="flex items-center gap-1">
@@ -192,13 +224,16 @@ function RuleRow({
 export function CategoryRuleRow({
   rule,
   categories,
+  target,
 }: {
+  target: "pessoal" | "casa";
   rule: { id: string; merchantName: string; categoryId: string; createdBy: string | null };
   categories: Category[];
 }) {
   return (
     <RuleRow
       kind="category"
+      target={target}
       ruleId={rule.id}
       merchant={rule.merchantName}
       value={rule.categoryId}
@@ -219,6 +254,7 @@ export function NatureRuleRow({
   return (
     <RuleRow
       kind="nature"
+      target="casa"
       ruleId={rule.id}
       merchant={rule.merchantName}
       value={rule.choice}
