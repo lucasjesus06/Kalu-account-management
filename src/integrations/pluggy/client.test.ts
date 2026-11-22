@@ -4,6 +4,7 @@ import billsFixture from "./__fixtures__/bills.json";
 import cardTransactionsFixture from "./__fixtures__/card-transactions.json";
 import {
   authenticate,
+  createConnectToken,
   getItem,
   listAccounts,
   listBills,
@@ -51,6 +52,43 @@ describe("authenticate", () => {
   it("rejeita resposta sem apiKey", async () => {
     vi.stubGlobal("fetch", respostaFalsa(200, {}));
     await expect(authenticate(credenciais)).rejects.toBeInstanceOf(PluggyRequestError);
+  });
+});
+
+describe("createConnectToken", () => {
+  it("cria o token para uma conexão nova, evitando duplicar itens", async () => {
+    const fetch = respostaFalsa(200, { accessToken: "token-de-conexao" });
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(createConnectToken("chave-123")).resolves.toBe("token-de-conexao");
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe("https://api.pluggy.ai/connect_token");
+    expect(init.method).toBe("POST");
+    expect(init.headers["X-API-KEY"]).toBe("chave-123");
+    expect(JSON.parse(init.body)).toEqual({ options: { avoidDuplicates: true } });
+  });
+
+  it("vincula o token ao item quando é uma renovação", async () => {
+    const fetch = respostaFalsa(200, { accessToken: "token" });
+    vi.stubGlobal("fetch", fetch);
+
+    await createConnectToken("chave-123", "item-1");
+
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({ itemId: "item-1", options: { avoidDuplicates: true } });
+  });
+
+  it.each([
+    [401, PluggyAuthError],
+    [404, PluggyNotFoundError],
+    [500, PluggyRequestError],
+  ])("trata HTTP %i", async (status, errorClass) => {
+    vi.stubGlobal("fetch", respostaFalsa(status));
+    await expect(createConnectToken("chave-123")).rejects.toBeInstanceOf(errorClass);
+  });
+
+  it("recusa resposta sem token", async () => {
+    vi.stubGlobal("fetch", respostaFalsa(200, {}));
+    await expect(createConnectToken("chave-123")).rejects.toBeInstanceOf(PluggyRequestError);
   });
 });
 

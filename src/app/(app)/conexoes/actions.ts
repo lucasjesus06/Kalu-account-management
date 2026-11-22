@@ -3,15 +3,23 @@
 import { refresh } from "next/cache";
 import { formatTransactionChanges } from "@/lib/format";
 import { getCurrentMember } from "@/server/auth";
-import { addConnection, listConnections, saveCredentials, type ActionResult } from "@/server/connections";
+import {
+  addConnection,
+  listConnections,
+  registerConnectedItem,
+  saveCredentials,
+  startConnectSession,
+  type ActionResult,
+  type ConnectSession,
+} from "@/server/connections";
 import { syncConnection } from "@/server/sync";
 
 export type FormState = ActionResult | null;
 
-const NOT_LINKED: ActionResult = {
+const NOT_LINKED = {
   ok: false,
   error: "Sua conta ainda não está vinculada a uma residência.",
-};
+} as const satisfies ActionResult;
 
 function field(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
@@ -62,4 +70,34 @@ export async function syncConnectionAction(_prevState: FormState, formData: Form
     return result;
   }
   return { ok: true, message: `Sincronizado: ${formatTransactionChanges(result.changes)}.` };
+}
+
+export async function startConnectAction(renewConnectionId?: string): Promise<ConnectSession> {
+  const member = await getCurrentMember();
+  if (!member) {
+    return NOT_LINKED;
+  }
+  return startConnectSession(member.memberId, renewConnectionId);
+}
+
+export async function finishConnectAction(itemId: string, renewConnectionId?: string): Promise<FormState> {
+  const member = await getCurrentMember();
+  if (!member) {
+    return NOT_LINKED;
+  }
+
+  const registered = await registerConnectedItem(member.memberId, itemId, renewConnectionId);
+  if (!registered.ok) {
+    return registered;
+  }
+
+  const sync = await syncConnection(registered.connectionId);
+  refresh();
+  if (!sync.ok) {
+    return {
+      ok: true,
+      message: `${registered.message} A primeira sincronização não foi concluída: ${sync.error} Tente em “Sincronizar agora”.`,
+    };
+  }
+  return { ok: true, message: `${registered.message} Sincronizado: ${formatTransactionChanges(sync.changes)}.` };
 }
