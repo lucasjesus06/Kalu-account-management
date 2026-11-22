@@ -97,11 +97,6 @@ export async function refreshExpenseNature(db: Executor, scope: SQL, rules: Read
 
 export type Editor = { memberId: string; householdId: string | null };
 
-export async function refreshEditableExpenseNature(db: Executor, editor: Editor, scope: SQL) {
-  const rules = editor.householdId ? await loadExpenseNatureRules(db, editor.householdId) : new Map<string, ExpenseAssignment>();
-  return refreshExpenseNature(db, and(scope, accountVisibleTo(editor.memberId, transactions.accountId))!, rules);
-}
-
 export async function refreshOwnedExpenseNature(db: Executor, memberId: string, scope: SQL) {
   const owned = and(scope, inArray(transactions.accountId, ownedAccountIds(memberId)))!;
   const links = await db

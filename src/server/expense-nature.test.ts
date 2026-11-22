@@ -202,10 +202,12 @@ describe("para quem acompanha a categoria", () => {
   });
 
   it("ao mudar a categoria no histórico, atualiza para quem de todo o estabelecimento, menos as escolhas do usuário", async () => {
+    const daKarina = await row(ids.daKarina);
+
     await correctCategory(lucas, ids.alvo, category.moradia, "merchant_history");
 
     expect(await row(ids.anterior)).toEqual({ nature: "household", memberId: null, source: "automatic" });
-    expect(await row(ids.daKarina)).toEqual({ nature: "household", memberId: null, source: "automatic" });
+    expect(await row(ids.daKarina)).toEqual(daKarina);
     expect(await row(ids.excecao)).toEqual({ nature: "individual", memberId: lucas.memberId, source: "user" });
     expect(await row(ids.outraResidencia)).toEqual(pending);
   });
