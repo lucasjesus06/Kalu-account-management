@@ -20,6 +20,7 @@ import { UUID_PATTERN, type ActionResult } from "./connections";
 import { recordChange } from "./change-log";
 import { loadConsumptionRecords } from "./consumption";
 import { expenseMembers } from "./expense-nature";
+import { dispatchBudgetPushes } from "./push";
 
 type Member = { memberId: string; householdId: string };
 
@@ -75,6 +76,12 @@ export async function evaluateBudgetAlerts(householdId: string, now: Date) {
   }
   const created = await getDb().insert(budgetAlerts).values(values).onConflictDoNothing().returning({ id: budgetAlerts.id });
   return created.length;
+}
+
+export async function evaluateAndNotify(householdId: string, now: Date) {
+  const created = await evaluateBudgetAlerts(householdId, now);
+  await dispatchBudgetPushes(householdId, now).catch((error) => console.error("Falha ao enviar os avisos", error));
+  return created;
 }
 
 export async function getBudgetOverview(householdId: string, month: string) {
@@ -196,7 +203,7 @@ export async function saveGoal(member: Member, input: GoalInput, now: Date): Pro
       await tx.insert(budgetGoals).values({ householdId: member.householdId, startsMonth: month, ...values });
       await logChange(tx, "goal_created", null);
     });
-    await evaluateBudgetAlerts(member.householdId, now);
+    await evaluateAndNotify(member.householdId, now);
     return { ok: true, message: `Meta de ${label} criada: ${amount} por mês.` };
   }
 
@@ -220,7 +227,7 @@ export async function saveGoal(member: Member, input: GoalInput, now: Date): Pro
     }
     await logChange(tx, "goal_updated", previousValue);
   });
-  await evaluateBudgetAlerts(member.householdId, now);
+  await evaluateAndNotify(member.householdId, now);
   return {
     ok: true,
     message:

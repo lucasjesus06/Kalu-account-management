@@ -3,6 +3,7 @@
 import { refresh } from "next/cache";
 import { getCurrentMember } from "@/server/auth";
 import { removeGoal, saveGoal } from "@/server/budget";
+import { removeSubscription, saveSubscription } from "@/server/push";
 import type { FormState } from "../conexoes/actions";
 
 function field(formData: FormData, name: string) {
@@ -37,6 +38,30 @@ export async function removeGoalAction(_prevState: FormState, formData: FormData
     return { ok: false, error: "Sua conta ainda não está vinculada a uma residência." };
   }
   const result = await removeGoal(member, field(formData, "goalId"), new Date());
+  if (result.ok) {
+    refresh();
+  }
+  return result;
+}
+
+export async function savePushSubscriptionAction(subscription: unknown): Promise<FormState> {
+  const member = await getCurrentMember();
+  if (!member) {
+    return { ok: false, error: "Sua conta ainda não está vinculada a uma residência." };
+  }
+  const result = await saveSubscription(member, subscription);
+  if (result.ok) {
+    refresh();
+  }
+  return result;
+}
+
+export async function removePushSubscriptionAction(endpoint: string): Promise<FormState> {
+  const member = await getCurrentMember();
+  if (!member) {
+    return { ok: false, error: "Sua conta ainda não está vinculada a uma residência." };
+  }
+  const result = await removeSubscription(member, String(endpoint));
   if (result.ok) {
     refresh();
   }
