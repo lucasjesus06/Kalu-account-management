@@ -14,10 +14,17 @@ import { formatDate, formatIsoDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { getCurrentMember } from "@/server/auth";
 import { getCardBillDetail, OPEN_CYCLE } from "@/server/bills";
+import { listCategories } from "@/server/categorization";
+import { CategoryCorrectionProvider, CorrectCategoryButton } from "./category-correction";
 
 export const metadata: Metadata = {
   title: "Fatura · Kalu",
 };
+
+const sourceLabels = {
+  rule: "regra da residência",
+  user: "ajustada por vocês",
+} as const;
 
 const paymentBadges = {
   paid: { label: "Paga", tone: "success" },
@@ -42,6 +49,13 @@ function TransactionRow({ line }: { line: BillLine }) {
             line.installmentTotal > 1 &&
             ` · parcela ${line.installmentNumber}/${line.installmentTotal}`}
           {line.status === "pending" && " · pendente"}
+          {(line.categorySource === "rule" || line.categorySource === "user") && ` · ${sourceLabels[line.categorySource]}`}
+          {" · "}
+          <CorrectCategoryButton
+            transactionId={line.id}
+            merchant={line.merchantName ?? line.description}
+            categorySlug={line.category?.slug ?? null}
+          />
         </span>
       </div>
       <Money
@@ -59,11 +73,10 @@ async function BillContent({ searchParams }: Pick<PageProps<"/contas/fatura">, "
   }
 
   const { cartao, ciclo } = await searchParams;
-  const detail = await getCardBillDetail(
-    member.householdId,
-    typeof cartao === "string" ? cartao : "",
-    typeof ciclo === "string" ? ciclo : undefined,
-  );
+  const [detail, categories] = await Promise.all([
+    getCardBillDetail(member.householdId, typeof cartao === "string" ? cartao : "", typeof ciclo === "string" ? ciclo : undefined),
+    listCategories(),
+  ]);
   if (!detail) {
     notFound();
   }
@@ -193,124 +206,126 @@ async function BillContent({ searchParams }: Pick<PageProps<"/contas/fatura">, "
         )}
       </p>
 
-      <div className="grid items-start gap-4 lg:grid-cols-3">
-        <Panel title="Por categoria" icon={Tags} className="lg:col-span-2">
-          {detail.categories.length === 0 && unidentifiedCents <= 0 ? (
-            <p className="text-muted-foreground">Nenhuma compra neste ciclo.</p>
-          ) : (
-            <ul className="flex flex-col divide-y">
-              {detail.categories.map((group) => {
-                const percent = base > 0 ? Math.max(0, Math.round((group.netCents / base) * 100)) : 0;
-                return (
-                  <li key={group.slug ?? "sem-categoria"}>
-                    <details className="group">
-                      <summary className="flex cursor-pointer list-none flex-col gap-2 py-3 [&::-webkit-details-marker]:hidden">
-                        <span className="flex items-center justify-between gap-4">
-                          <span className={cn("min-w-0 truncate font-medium", group.slug === null && "text-muted-foreground")}>
-                            {group.name}
-                          </span>
-                          <span className="flex shrink-0 items-baseline gap-2">
-                            <span className="text-xs text-muted-foreground">{percent}%</span>
-                            <Money value={fromCents(group.netCents)} className="font-semibold" />
-                          </span>
-                        </span>
-                        <span className="h-1.5 overflow-hidden rounded-full bg-secondary" role="presentation">
-                          <span className="block h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {plural(group.count, "transação", "transações")} ·{" "}
-                          <span className="group-open:hidden">ver transações</span>
-                          <span className="hidden group-open:inline">ocultar</span>
-                        </span>
-                      </summary>
-                      <ul className="mb-3 flex flex-col divide-y rounded-xl bg-secondary/40 px-4">
-                        {group.lines.map((line) => (
-                          <TransactionRow key={line.id} line={line} />
-                        ))}
-                      </ul>
-                    </details>
-                  </li>
-                );
-              })}
-              {unidentifiedCents > 0 && (
-                <li className="flex flex-col gap-2 py-3">
-                  <span className="flex items-center justify-between gap-4">
-                    <span className="font-medium text-muted-foreground">Não identificado pela fonte</span>
-                    <span className="flex shrink-0 items-baseline gap-2">
-                      <span className="text-xs text-muted-foreground">{Math.round((unidentifiedCents / base) * 100)}%</span>
-                      <Money value={fromCents(unidentifiedCents)} className="font-semibold text-muted-foreground" />
-                    </span>
-                  </span>
-                  <span className="h-1.5 overflow-hidden rounded-full bg-secondary" role="presentation">
-                    <span
-                      className="block h-full rounded-full bg-muted-foreground/50"
-                      style={{ width: `${Math.round((unidentifiedCents / base) * 100)}%` }}
-                    />
-                  </span>
-                </li>
-              )}
-            </ul>
-          )}
-        </Panel>
-
-        <div className="flex flex-col gap-4">
-          <Panel title="Maiores estabelecimentos" icon={Store}>
-            {detail.merchants.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma compra neste ciclo.</p>
-            ) : (
-              <ol className="flex flex-col gap-3">
-                {detail.merchants.map((merchant) => (
-                  <li key={merchant.name} className="flex items-center justify-between gap-4 text-sm">
-                    <span className="flex min-w-0 flex-col">
-                      <span className="truncate font-medium">{merchant.name}</span>
-                      <span className="text-xs text-muted-foreground">{plural(merchant.count, "transação", "transações")}</span>
-                    </span>
-                    <Money value={fromCents(merchant.netCents)} className="shrink-0" />
-                  </li>
-                ))}
-              </ol>
-            )}
-          </Panel>
-
-          <Panel title="Créditos e estornos" icon={Undo2}>
-            {detail.credits.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhum crédito neste ciclo.</p>
+      <CategoryCorrectionProvider categories={categories}>
+        <div className="grid items-start gap-4 lg:grid-cols-3">
+          <Panel title="Por categoria" icon={Tags} className="lg:col-span-2">
+            {detail.categories.length === 0 && unidentifiedCents <= 0 ? (
+              <p className="text-muted-foreground">Nenhuma compra neste ciclo.</p>
             ) : (
               <ul className="flex flex-col divide-y">
-                {detail.credits.map((line) => (
-                  <TransactionRow key={line.id} line={line} />
-                ))}
+                {detail.categories.map((group) => {
+                  const percent = base > 0 ? Math.max(0, Math.round((group.netCents / base) * 100)) : 0;
+                  return (
+                    <li key={group.slug ?? "sem-categoria"}>
+                      <details className="group">
+                        <summary className="flex cursor-pointer list-none flex-col gap-2 py-3 [&::-webkit-details-marker]:hidden">
+                          <span className="flex items-center justify-between gap-4">
+                            <span className={cn("min-w-0 truncate font-medium", group.slug === null && "text-muted-foreground")}>
+                              {group.name}
+                            </span>
+                            <span className="flex shrink-0 items-baseline gap-2">
+                              <span className="text-xs text-muted-foreground">{percent}%</span>
+                              <Money value={fromCents(group.netCents)} className="font-semibold" />
+                            </span>
+                          </span>
+                          <span className="h-1.5 overflow-hidden rounded-full bg-secondary" role="presentation">
+                            <span className="block h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {plural(group.count, "transação", "transações")} ·{" "}
+                            <span className="group-open:hidden">ver transações</span>
+                            <span className="hidden group-open:inline">ocultar</span>
+                          </span>
+                        </summary>
+                        <ul className="mb-3 flex flex-col divide-y rounded-xl bg-secondary/40 px-4">
+                          {group.lines.map((line) => (
+                            <TransactionRow key={line.id} line={line} />
+                          ))}
+                        </ul>
+                      </details>
+                    </li>
+                  );
+                })}
+                {unidentifiedCents > 0 && (
+                  <li className="flex flex-col gap-2 py-3">
+                    <span className="flex items-center justify-between gap-4">
+                      <span className="font-medium text-muted-foreground">Não identificado pela fonte</span>
+                      <span className="flex shrink-0 items-baseline gap-2">
+                        <span className="text-xs text-muted-foreground">{Math.round((unidentifiedCents / base) * 100)}%</span>
+                        <Money value={fromCents(unidentifiedCents)} className="font-semibold text-muted-foreground" />
+                      </span>
+                    </span>
+                    <span className="h-1.5 overflow-hidden rounded-full bg-secondary" role="presentation">
+                      <span
+                        className="block h-full rounded-full bg-muted-foreground/50"
+                        style={{ width: `${Math.round((unidentifiedCents / base) * 100)}%` }}
+                      />
+                    </span>
+                  </li>
+                )}
               </ul>
             )}
           </Panel>
 
-          <Panel title="Parcelas futuras" icon={Layers}>
-            {detail.installments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma compra parcelada com parcelas a cobrar.</p>
-            ) : (
-              <>
-                <ul className="flex flex-col gap-3">
-                  {detail.installments.map(({ line, remaining, remainingCents }) => (
-                    <li key={line.id} className="flex items-center justify-between gap-4 text-sm">
+          <div className="flex flex-col gap-4">
+            <Panel title="Maiores estabelecimentos" icon={Store}>
+              {detail.merchants.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhuma compra neste ciclo.</p>
+              ) : (
+                <ol className="flex flex-col gap-3">
+                  {detail.merchants.map((merchant) => (
+                    <li key={merchant.name} className="flex items-center justify-between gap-4 text-sm">
                       <span className="flex min-w-0 flex-col">
-                        <span className="truncate font-medium">{line.merchantName ?? line.description}</span>
-                        <span className="text-xs text-muted-foreground">
-                          Parcela {line.installmentNumber}/{line.installmentTotal} · {plural(remaining, "restante", "restantes")}
-                        </span>
+                        <span className="truncate font-medium">{merchant.name}</span>
+                        <span className="text-xs text-muted-foreground">{plural(merchant.count, "transação", "transações")}</span>
                       </span>
-                      <Money value={fromCents(remainingCents)} className="shrink-0" />
+                      <Money value={fromCents(merchant.netCents)} className="shrink-0" />
                     </li>
                   ))}
+                </ol>
+              )}
+            </Panel>
+
+            <Panel title="Créditos e estornos" icon={Undo2}>
+              {detail.credits.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhum crédito neste ciclo.</p>
+              ) : (
+                <ul className="flex flex-col divide-y">
+                  {detail.credits.map((line) => (
+                    <TransactionRow key={line.id} line={line} />
+                  ))}
                 </ul>
-                <p className="mt-4 border-t pt-4 text-xs text-muted-foreground">
-                  Total de <Money value={fromCents(detail.installments.reduce((total, item) => total + item.remainingCents, 0))} />,
-                  calculado a partir do valor da parcela deste ciclo.
-                </p>
-              </>
-            )}
-          </Panel>
+              )}
+            </Panel>
+
+            <Panel title="Parcelas futuras" icon={Layers}>
+              {detail.installments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nenhuma compra parcelada com parcelas a cobrar.</p>
+              ) : (
+                <>
+                  <ul className="flex flex-col gap-3">
+                    {detail.installments.map(({ line, remaining, remainingCents }) => (
+                      <li key={line.id} className="flex items-center justify-between gap-4 text-sm">
+                        <span className="flex min-w-0 flex-col">
+                          <span className="truncate font-medium">{line.merchantName ?? line.description}</span>
+                          <span className="text-xs text-muted-foreground">
+                            Parcela {line.installmentNumber}/{line.installmentTotal} · {plural(remaining, "restante", "restantes")}
+                          </span>
+                        </span>
+                        <Money value={fromCents(remainingCents)} className="shrink-0" />
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-4 border-t pt-4 text-xs text-muted-foreground">
+                    Total de <Money value={fromCents(detail.installments.reduce((total, item) => total + item.remainingCents, 0))} />,
+                    calculado a partir do valor da parcela deste ciclo.
+                  </p>
+                </>
+              )}
+            </Panel>
+          </div>
         </div>
-      </div>
+      </CategoryCorrectionProvider>
     </>
   );
 }

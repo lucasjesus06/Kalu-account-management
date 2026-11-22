@@ -3,6 +3,7 @@ import { asc, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   categories,
+  categoryRules,
   creditCardBills,
   financialAccounts,
   integrationConnections,
@@ -539,5 +540,62 @@ describe("categorização na sincronização", () => {
     await syncConnection(connectionId);
 
     expect(await categoryOf(PENDING_ID)).toMatchObject({ category: "outros", source: "user" });
+  });
+});
+
+describe("regras de categoria da residência na sincronização", () => {
+  async function categoryOf(externalId: string) {
+    const [row] = await db()
+      .select({ category: categories.slug, source: transactions.categorySource })
+      .from(transactions)
+      .leftJoin(categories, eq(categories.id, transactions.categoryId))
+      .where(eq(transactions.externalId, externalId));
+    return row;
+  }
+
+  async function addRule(merchantName: string, slug: string) {
+    const [category] = await db().select().from(categories).where(eq(categories.slug, slug));
+    await db().insert(categoryRules).values({ householdId, merchantName, categoryId: category.id });
+  }
+
+  it("a regra da residência vence a regra automática nas transações novas", async () => {
+    await addRule("UBER", "transporte");
+
+    await syncConnection(connectionId);
+
+    expect(await categoryOf(PENDING_ID)).toEqual({ category: "transporte", source: "rule" });
+    expect(await categoryOf("aa11aa11-0000-4000-8000-000000000005")).toEqual({ category: "restaurantes", source: "automatic" });
+  });
+
+  it("não aplica regra de outra residência", async () => {
+    const outra = await seedHousehold(db());
+    const [category] = await db().select().from(categories).where(eq(categories.slug, "transporte"));
+    await db().insert(categoryRules).values({ householdId: outra.household.id, merchantName: "UBER", categoryId: category.id });
+
+    await syncConnection(connectionId);
+
+    expect(await categoryOf(PENDING_ID)).toEqual({ category: "transporte-por-aplicativo", source: "automatic" });
+  });
+
+  it("regra criada depois não altera o que já foi categorizado", async () => {
+    await syncConnection(connectionId);
+    await addRule("UBER", "transporte");
+
+    await syncConnection(connectionId);
+
+    expect(await categoryOf(PENDING_ID)).toEqual({ category: "transporte-por-aplicativo", source: "automatic" });
+  });
+
+  it("reavalia pela regra quando a descrição muda na fonte", async () => {
+    await addRule("UBER", "transporte");
+    await addRule("DROGASIL 123", "saude");
+    await syncConnection(connectionId);
+    fixtures.cardTransactions = fixtures.cardTransactions.map((t) =>
+      t.id === PENDING_ID ? { ...t, description: "DROGASIL 123" } : t,
+    );
+
+    await syncConnection(connectionId);
+
+    expect(await categoryOf(PENDING_ID)).toEqual({ category: "saude", source: "rule" });
   });
 });

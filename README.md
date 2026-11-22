@@ -158,6 +158,16 @@ A categorização automática é determinística, sem inteligência artificial:
 2. Na falta deles, a categoria informada pela Pluggy, traduzida para as categorias do Kalu.
 3. Sem nenhuma das duas, a transação fica sem categoria. Pagamentos de fatura, transferências e receitas ficam sem categoria de propósito.
 
+### Correção de categoria
+
+Na tela da fatura, cada transação tem o botão **Alterar**, que abre a correção com três opções:
+
+- **Somente nesta transação**: a escolha fica marcada como do usuário (`user`) e nenhuma regra é criada. Esse tipo de ajuste nunca é substituído por regras.
+- **Nesta e nas próximas deste estabelecimento**: cria ou atualiza uma regra da residência para o estabelecimento normalizado (tabela `category_rules`). As transações anteriores não mudam.
+- **Em todas deste estabelecimento, inclusive as anteriores**: cria a regra e a reaplica explicitamente ao histórico da residência, preservando os ajustes feitos só numa transação.
+
+Na sincronização, a regra da residência vem antes das regras automáticas. As transações mostram quando a categoria veio de uma regra da residência ou de um ajuste.
+
 A sincronização categoriza só as transações ainda não avaliadas, então mudar uma regra não reescreve o histórico. Uma transação categorizada automaticamente volta a ser avaliada apenas se a descrição ou a categoria da fonte mudar. Classificações feitas pelo usuário nunca são alteradas pela sincronização. A tela Contas mostra a porcentagem das compras de cada cartão que têm categoria.
 
 ## Testes

@@ -3,8 +3,10 @@ import { and, asc, desc, eq, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
   categories,
+  categoryRules,
   creditCardBills,
   financialAccounts,
+  householdMembers,
   integrationConnections,
   pluggyCredentials,
   syncRuns,
@@ -214,7 +216,7 @@ async function saveTransactions(
           installmentNumber: excluded("installment_number"),
           installmentTotal: excluded("installment_total"),
           providerCategory: excluded("provider_category"),
-          categorySource: sql`case when ${transactions.categorySource} = 'automatic' and (${transactions.description} is distinct from excluded.description or ${transactions.providerCategory} is distinct from excluded.provider_category) then null else ${transactions.categorySource} end`,
+          categorySource: sql`case when ${transactions.categorySource} in ('automatic', 'rule') and (${transactions.description} is distinct from excluded.description or ${transactions.providerCategory} is distinct from excluded.provider_category) then null else ${transactions.categorySource} end`,
           updatedAt: new Date(),
         },
       });
@@ -231,7 +233,9 @@ async function saveTransactions(
   return { created: created.length, updated: updated.length, removed: vanished.length };
 }
 
-async function categorizeTransactions(tx: Tx, accountId: string, categoryIds: Map<string, string>) {
+type Categorizer = { categoryIds: Map<string, string>; rules: Map<string, string> };
+
+async function categorizeTransactions(tx: Tx, accountId: string, { categoryIds, rules }: Categorizer) {
   const pending = await tx
     .select({ id: transactions.id, description: transactions.description, providerCategory: transactions.providerCategory })
     .from(transactions)
@@ -239,14 +243,19 @@ async function categorizeTransactions(tx: Tx, accountId: string, categoryIds: Ma
 
   for (const batch of chunk(pending)) {
     const values = batch.map((transaction) => {
+      const merchant = merchantName(transaction.description);
+      const ruleCategoryId = rules.get(merchant);
+      if (ruleCategoryId) {
+        return sql`(${transaction.id}::uuid, ${merchant}, ${ruleCategoryId}::uuid, 'rule')`;
+      }
       const match = categorize(transaction);
       const categoryId = match ? (categoryIds.get(match.slug) ?? null) : null;
-      return sql`(${transaction.id}::uuid, ${merchantName(transaction.description)}, ${categoryId}::uuid)`;
+      return sql`(${transaction.id}::uuid, ${merchant}, ${categoryId}::uuid, 'automatic')`;
     });
     await tx.execute(sql`
       update ${transactions}
-      set merchant_name = v.merchant_name, category_id = v.category_id, category_source = 'automatic'
-      from (values ${sql.join(values, sql`, `)}) as v(id, merchant_name, category_id)
+      set merchant_name = v.merchant_name, category_id = v.category_id, category_source = v.category_source
+      from (values ${sql.join(values, sql`, `)}) as v(id, merchant_name, category_id, category_source)
       where ${transactions.id} = v.id
     `);
   }
@@ -342,9 +351,18 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
     let billsCount = 0;
     let transactionsCount = 0;
     const changes: TransactionChanges = { created: 0, updated: 0, removed: 0 };
-    const categoryIds = new Map(
-      (await db.select({ id: categories.id, slug: categories.slug }).from(categories)).map((row) => [row.slug, row.id]),
-    );
+    const [categoryRows, ruleRows] = await Promise.all([
+      db.select({ id: categories.id, slug: categories.slug }).from(categories),
+      db
+        .select({ merchantName: categoryRules.merchantName, categoryId: categoryRules.categoryId })
+        .from(categoryRules)
+        .innerJoin(householdMembers, eq(householdMembers.householdId, categoryRules.householdId))
+        .where(eq(householdMembers.id, connection.memberId)),
+    ]);
+    const categorizer: Categorizer = {
+      categoryIds: new Map(categoryRows.map((row) => [row.slug, row.id])),
+      rules: new Map(ruleRows.map((row) => [row.merchantName, row.categoryId])),
+    };
     for (const account of accounts) {
       const bills = account.kind === "credit_card" ? await listBills(apiKey, account) : [];
       const imported = await listTransactions(apiKey, account);
@@ -353,7 +371,7 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
         const accountId = await saveAccount(tx, connection.id, account);
         const billIds = await saveBills(tx, accountId, bills);
         const saved = await saveTransactions(tx, accountId, imported, billIds);
-        await categorizeTransactions(tx, accountId, categoryIds);
+        await categorizeTransactions(tx, accountId, categorizer);
         return saved;
       });
       changes.created += accountChanges.created;
