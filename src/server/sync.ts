@@ -37,6 +37,8 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 const CHUNK_SIZE = 500;
 const STALE_RUN_MINUTES = 15;
 
+export const SYNC_ALREADY_RUNNING = "Já existe uma sincronização em andamento para esta conexão.";
+
 class SyncError extends Error {}
 
 class AuthorizationExpiredError extends Error {}
@@ -310,7 +312,7 @@ export async function syncConnection(connectionId: string): Promise<SyncResult> 
 
   const [run] = await db.insert(syncRuns).values({ connectionId }).onConflictDoNothing().returning({ id: syncRuns.id });
   if (!run) {
-    return { ok: false, error: "Já existe uma sincronização em andamento para esta conexão." };
+    return { ok: false, error: SYNC_ALREADY_RUNNING };
   }
 
   try {
