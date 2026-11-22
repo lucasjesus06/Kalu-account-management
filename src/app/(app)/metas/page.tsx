@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import { BellRing, Plus, Target } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
@@ -12,10 +13,12 @@ import { isMonth, monthOf } from "@/domain/periods";
 import { formatDateTime, formatMonth } from "@/lib/format";
 import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
 import { getBudgetOverview, listAlerts } from "@/server/budget";
+import { countMemberSubscriptions, vapidPublicKey } from "@/server/push";
 import { listCategories } from "@/server/categorization";
 import { availableMonths } from "@/server/consumption";
 import { GoalForm, RemoveGoalButton } from "./goal-form";
 import { GoalProgressItem } from "./goal-progress";
+import { PushToggle } from "./push-toggle";
 
 export const metadata: Metadata = {
   title: "Metas · Kalu",
@@ -37,12 +40,13 @@ async function GoalsContent({ searchParams }: Pick<PageProps<"/metas">, "searchP
   const { mes } = await searchParams;
   const currentMonth = monthOf(new Date());
   const month = typeof mes === "string" && isMonth(mes) && mes <= currentMonth ? mes : currentMonth;
-  const [overview, alerts, categories, members, months] = await Promise.all([
+  const [overview, alerts, categories, members, months, subscribedDevices] = await Promise.all([
     getBudgetOverview(member.householdId, month),
     listAlerts(member.householdId),
     listCategories(),
     listHouseholdMembers(member.householdId),
     availableMonths(member.householdId),
+    countMemberSubscriptions(member.memberId),
   ]);
   const isCurrent = month === currentMonth;
   const monthOptions = [currentMonth, ...months.filter((m) => m < currentMonth)];
@@ -54,6 +58,11 @@ async function GoalsContent({ searchParams }: Pick<PageProps<"/metas">, "searchP
       <PageHeader
         title="Metas"
         description="Limites de gasto por mês. O Kalu avisa quando o consumo chega perto ou passa do limite."
+        action={
+          <Button asChild variant="outline">
+            <Link href="/historico">Histórico de alterações</Link>
+          </Button>
+        }
       />
 
       <section className="flex flex-col gap-4 rounded-2xl border bg-card p-5 sm:p-6">
@@ -129,6 +138,9 @@ async function GoalsContent({ searchParams }: Pick<PageProps<"/metas">, "searchP
       )}
 
       <Panel title="Avisos" icon={BellRing}>
+        <div className="mb-5">
+          <PushToggle publicKey={vapidPublicKey()} subscribedDevices={subscribedDevices} />
+        </div>
         {alerts.length === 0 ? (
           <p className="text-muted-foreground">Nenhum aviso ainda.</p>
         ) : (

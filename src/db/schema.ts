@@ -1,6 +1,7 @@
 import { bigint, check, date, index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { authUsers } from "drizzle-orm/supabase";
+import { changeKinds, changeScopes } from "../domain/change-log";
 import { expenseNatureSources, expenseNatures } from "../domain/expense-nature";
 
 export const households = pgTable("households", {
@@ -299,7 +300,45 @@ export const budgetAlerts = pgTable(
     consumedCents: cents("consumed_cents").notNull(),
     limitCents: cents("limit_cents").notNull(),
     triggeredAt: timestamp("triggered_at", { withTimezone: true }).notNull().defaultNow(),
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
   },
   (table) => [uniqueIndex("budget_alerts_goal_month_threshold_idx").on(table.goalId, table.month, table.threshold)],
 ).enableRLS();
 
+
+export const changeLog = pgTable(
+  "change_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    memberId: uuid("member_id").references(() => householdMembers.id, { onDelete: "set null" }),
+    kind: text("kind", { enum: changeKinds }).notNull(),
+    subject: text("subject").notNull(),
+    scope: text("scope", { enum: changeScopes }),
+    previousValue: text("previous_value"),
+    newValue: text("new_value"),
+    affectedCount: integer("affected_count").notNull().default(1),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("change_log_household_occurred_idx").on(table.householdId, table.occurredAt)],
+).enableRLS();
+
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    memberId: uuid("member_id")
+      .notNull()
+      .references(() => householdMembers.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("push_subscriptions_endpoint_idx").on(table.endpoint),
+    index("push_subscriptions_member_idx").on(table.memberId),
+  ],
+).enableRLS();
