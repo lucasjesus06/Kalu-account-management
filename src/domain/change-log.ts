@@ -6,6 +6,8 @@ export const changeKinds = [
   "goal_created",
   "goal_updated",
   "goal_removed",
+  "account_shared",
+  "account_unshared",
 ] as const;
 export type ChangeKind = (typeof changeKinds)[number];
 
@@ -18,6 +20,8 @@ const kindLabels: Record<ChangeKind, string> = {
   goal_created: "Meta criada",
   goal_updated: "Meta alterada",
   goal_removed: "Meta removida",
+  account_shared: "Conta compartilhada",
+  account_unshared: "Compartilhamento removido",
 };
 
 const scopeLabels: Record<ChangeScope, string> = {
@@ -26,12 +30,13 @@ const scopeLabels: Record<ChangeScope, string> = {
   merchant_history: "Em todas deste estabelecimento, inclusive as anteriores",
 };
 
-export type ChangeFilter = "todas" | "classificacao" | "metas";
+export type ChangeFilter = "todas" | "classificacao" | "metas" | "compartilhamento";
 
 export const changeFilters: { value: ChangeFilter; label: string; kinds: readonly ChangeKind[] }[] = [
   { value: "todas", label: "Todas", kinds: changeKinds },
   { value: "classificacao", label: "Classificação", kinds: ["category_changed", "expense_changed"] },
   { value: "metas", label: "Metas", kinds: ["goal_created", "goal_updated", "goal_removed"] },
+  { value: "compartilhamento", label: "Compartilhamento", kinds: ["account_shared", "account_unshared"] },
 ];
 
 export function parseChangeFilter(value: unknown): ChangeFilter {
