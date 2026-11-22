@@ -2,7 +2,7 @@
 
 import { refresh } from "next/cache";
 import { formatTransactionChanges } from "@/lib/format";
-import { getCurrentMember } from "@/server/auth";
+import { getCurrentProfile } from "@/server/auth";
 import {
   addConnection,
   listConnections,
@@ -17,20 +17,12 @@ import { registerWebhook } from "@/server/webhook-registration";
 
 export type FormState = ActionResult | null;
 
-const NOT_LINKED = {
-  ok: false,
-  error: "Sua conta ainda não está vinculada a uma residência.",
-} as const satisfies ActionResult;
-
 function field(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
 }
 
 export async function saveCredentialsAction(_prevState: FormState, formData: FormData): Promise<FormState> {
-  const member = await getCurrentMember();
-  if (!member) {
-    return NOT_LINKED;
-  }
+  const member = await getCurrentProfile();
 
   const result = await saveCredentials(member.memberId, field(formData, "clientId"), field(formData, "clientSecret"));
   if (result.ok) {
@@ -40,10 +32,7 @@ export async function saveCredentialsAction(_prevState: FormState, formData: For
 }
 
 export async function addConnectionAction(_prevState: FormState, formData: FormData): Promise<FormState> {
-  const member = await getCurrentMember();
-  if (!member) {
-    return NOT_LINKED;
-  }
+  const member = await getCurrentProfile();
 
   const result = await addConnection(member.memberId, field(formData, "itemId"));
   if (result.ok) {
@@ -53,10 +42,7 @@ export async function addConnectionAction(_prevState: FormState, formData: FormD
 }
 
 export async function syncConnectionAction(_prevState: FormState, formData: FormData): Promise<FormState> {
-  const member = await getCurrentMember();
-  if (!member) {
-    return NOT_LINKED;
-  }
+  const member = await getCurrentProfile();
 
   const connectionId = field(formData, "connectionId");
   const ownConnections = await listConnections(member.memberId);
@@ -74,18 +60,12 @@ export async function syncConnectionAction(_prevState: FormState, formData: Form
 }
 
 export async function startConnectAction(renewConnectionId?: string): Promise<ConnectSession> {
-  const member = await getCurrentMember();
-  if (!member) {
-    return NOT_LINKED;
-  }
+  const member = await getCurrentProfile();
   return startConnectSession(member.memberId, renewConnectionId);
 }
 
 export async function finishConnectAction(itemId: string, renewConnectionId?: string): Promise<FormState> {
-  const member = await getCurrentMember();
-  if (!member) {
-    return NOT_LINKED;
-  }
+  const member = await getCurrentProfile();
 
   const registered = await registerConnectedItem(member.memberId, itemId, renewConnectionId);
   if (!registered.ok) {
@@ -104,10 +84,7 @@ export async function finishConnectAction(itemId: string, renewConnectionId?: st
 }
 
 export async function registerWebhookAction(): Promise<FormState> {
-  const member = await getCurrentMember();
-  if (!member) {
-    return NOT_LINKED;
-  }
+  const member = await getCurrentProfile();
   const result = await registerWebhook(member.memberId);
   if (result.ok) {
     refresh();

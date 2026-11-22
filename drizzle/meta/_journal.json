@@ -127,6 +127,13 @@
       "when": 1795372167432,
       "tag": "0017_push_dos_avisos",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795374844581,
+      "tag": "0018_perfil_e_participacao_em_residencias",
+      "breakpoints": true
     }
   ]
 }

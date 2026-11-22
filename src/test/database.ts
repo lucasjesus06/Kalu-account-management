@@ -20,5 +20,9 @@ export async function seedHousehold(db: Awaited<ReturnType<typeof createTestData
       { householdId: household.id, displayName: "Karina" },
     ])
     .returning();
+  await db.insert(schema.householdMemberships).values([
+    { householdId: household.id, memberId: members[0].id, role: "admin" },
+    { householdId: household.id, memberId: members[1].id, role: "member" },
+  ]);
   return { household, lucas: members[0], karina: members[1] };
 }

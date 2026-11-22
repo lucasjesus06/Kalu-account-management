@@ -58,21 +58,39 @@ O login é feito com e-mail e senha pelo Supabase Auth. Não há cadastro públi
 1. Em **Project Settings → API Keys**, copie a chave **publishable** para `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 2. Em **Authentication → Sign In / Providers**, desative **Allow new users to sign up** e deixe o provedor **Email** habilitado.
 3. Em **Authentication → Users → Add user → Create new user**, crie uma conta para cada integrante, com **Auto Confirm User** marcado.
-4. No **SQL Editor**, crie a residência e vincule os integrantes às contas, ajustando nomes e e-mails:
+4. Na primeira vez que alguém entra, o Kalu cria o perfil pessoal dessa conta (`household_members`, sem residência). Para criar uma residência e vincular as pessoas, use o **SQL Editor**, ajustando nomes e e-mails. O primeiro papel é o administrador:
 
 ```sql
 with casa as (
   insert into households (name) values ('Nossa casa') returning id
+),
+pessoas (nome, email, papel) as (
+  values
+    ('Lucas', 'email-do-lucas@exemplo.com', 'admin'),
+    ('Karina', 'email-da-karina@exemplo.com', 'member')
+),
+perfis as (
+  insert into household_members (household_id, display_name, user_id)
+  select casa.id, pessoa.nome, u.id
+  from casa
+  cross join pessoas pessoa
+  join auth.users u on u.email = pessoa.email
+  returning id, household_id, display_name
 )
-insert into household_members (household_id, display_name, user_id)
-select casa.id, integrante.nome, u.id
-from casa
-cross join (values
-  ('Lucas', 'email-do-lucas@exemplo.com'),
-  ('Karina', 'email-da-karina@exemplo.com')
-) as integrante(nome, email)
-join auth.users u on u.email = integrante.email;
+insert into household_memberships (household_id, member_id, role)
+select perfil.household_id, perfil.id, pessoa.papel
+from perfis perfil
+join pessoas pessoa on pessoa.nome = perfil.display_name;
 ```
+
+Se o perfil já existir (a pessoa já entrou), use `update household_members set household_id = ... where user_id = ...` e insira só a participação.
+
+### Perfis e residências
+
+- **Perfil pessoal** (`household_members`): existe para todo usuário autenticado, com ou sem residência. É o dono das conexões, contas, cartões e transações, e das credenciais da Pluggy. Sem residência, a pessoa já conecta bancos e sincroniza em **Conexões**.
+- **Residência** (`households`): espaço de consolidação, criado manualmente, que não é dona dos dados financeiros de ninguém.
+- **Participação** (`household_memberships`): liga um perfil a uma residência com o papel `admin` ou `member`. Uma pessoa pode participar de mais de uma residência, uma residência tem exatamente um administrador e não pressupõe parentesco ou casamento. Participar não dá, por si só, acesso aos dados financeiros de ninguém.
+- A coluna `household_members.household_id` é legada (a residência única de antes). A fonte de verdade da participação é `household_memberships`. Nesta etapa as telas de consumo ainda leem a residência atual; o escopo pessoal e o compartilhamento por conta chegam nas próximas estórias.
 
 Rotas protegidas redirecionam para `/login` quem não estiver autenticado. As páginas `/login` e `/status` são públicas.
 
