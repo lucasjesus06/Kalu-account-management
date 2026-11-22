@@ -1,6 +1,6 @@
 import "server-only";
 import { and, eq } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { asService, getDb } from "@/db/client";
 import { integrationConnections, pluggyCredentials, webhookEvents } from "@/db/schema";
 import { SYNC_ALREADY_RUNNING, syncConnection } from "./sync";
 
@@ -50,7 +50,7 @@ export function parseWebhookPayload(rawBody: string): PluggyWebhookPayload | nul
   };
 }
 
-export async function recordWebhookEvent(payload: PluggyWebhookPayload) {
+async function recordWebhookEventImpl(payload: PluggyWebhookPayload) {
   const [recorded] = await getDb()
     .insert(webhookEvents)
     .values({
@@ -102,7 +102,7 @@ async function decide(payload: PluggyWebhookPayload): Promise<Outcome> {
   };
 }
 
-export async function processWebhookEvent(recordId: string, payload: PluggyWebhookPayload) {
+async function processWebhookEventImpl(recordId: string, payload: PluggyWebhookPayload) {
   let outcome: Outcome;
   try {
     outcome = await decide(payload);
@@ -115,4 +115,12 @@ export async function processWebhookEvent(recordId: string, payload: PluggyWebho
     .set({ ...outcome, processedAt: new Date() })
     .where(eq(webhookEvents.id, recordId));
   return outcome;
+}
+
+export function recordWebhookEvent(...args: Parameters<typeof recordWebhookEventImpl>) {
+  return asService(() => recordWebhookEventImpl(...args));
+}
+
+export function processWebhookEvent(...args: Parameters<typeof processWebhookEventImpl>) {
+  return asService(() => processWebhookEventImpl(...args));
 }

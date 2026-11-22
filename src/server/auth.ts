@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { displayNameFromEmail } from "@/domain/household";
 import { resolveScope, SCOPE_COOKIE, type Scope } from "@/domain/scope";
+import { bindRequestMember } from "@/db/client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { Editor } from "./expense-nature";
 import { ensureProfile, listHouseholdLinks, type HouseholdLink, type Profile } from "./profiles";
@@ -29,7 +30,9 @@ async function getAuthenticatedUser() {
 
 export async function getCurrentProfile(): Promise<CurrentProfile> {
   const { userId, email } = await getAuthenticatedUser();
-  return ensureProfile(userId, displayNameFromEmail(email));
+  const profile = await ensureProfile(userId, displayNameFromEmail(email));
+  await bindRequestMember(profile.memberId);
+  return profile;
 }
 
 export type CurrentContext = {

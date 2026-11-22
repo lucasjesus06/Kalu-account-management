@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { and, asc, eq, gt, isNull, ne, sql } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { asService, getDb } from "@/db/client";
 import { householdInvites, householdMembers, householdMemberships, householdSharedAccounts, households } from "@/db/schema";
 import { inviteExpiry, inviteStatus, parseHouseholdName } from "@/domain/invite";
 import { recordChange, type ChangeEntry } from "./change-log";
@@ -44,7 +44,7 @@ async function detach(tx: Tx, householdId: string, memberId: string) {
     .where(and(eq(householdMembers.id, memberId), eq(householdMembers.householdId, householdId)));
 }
 
-export async function createHousehold(memberId: string, rawName: unknown): Promise<HouseholdResult<{ householdId: string }>> {
+async function createHouseholdImpl(memberId: string, rawName: unknown): Promise<HouseholdResult<{ householdId: string }>> {
   const name = parseHouseholdName(rawName);
   if (!name) {
     return { ok: false, error: "Dê um nome de até 60 caracteres para a residência." };
@@ -130,7 +130,7 @@ export async function revokeInvite(memberId: string, inviteId: string): Promise<
   return { ok: true };
 }
 
-export async function getInvitePreview(token: string, now = new Date()) {
+async function getInvitePreviewImpl(token: string, now = new Date()) {
   const [invite] = await getDb()
     .select({
       householdName: households.name,
@@ -146,7 +146,7 @@ export async function getInvitePreview(token: string, now = new Date()) {
   return invite ? { householdName: invite.householdName, inviterName: invite.inviterName, status: inviteStatus(invite, now) } : null;
 }
 
-export async function acceptInvite(memberId: string, token: string, now = new Date()): Promise<HouseholdResult<{ householdName: string }>> {
+async function acceptInviteImpl(memberId: string, token: string, now = new Date()): Promise<HouseholdResult<{ householdName: string }>> {
   const db = getDb();
   const [invite] = await db
     .select({
@@ -217,10 +217,12 @@ export async function leaveHousehold(memberId: string, householdId: string): Pro
   }
 
   if (others === 0) {
-    await db.transaction(async (tx) => {
-      await tx.update(householdMembers).set({ householdId: null }).where(eq(householdMembers.householdId, householdId));
-      await tx.delete(households).where(eq(households.id, householdId));
-    });
+    await asService(() =>
+      getDb().transaction(async (tx) => {
+        await tx.update(householdMembers).set({ householdId: null }).where(eq(householdMembers.householdId, householdId));
+        await tx.delete(households).where(eq(households.id, householdId));
+      }),
+    );
     return { ok: true, closed: true };
   }
 
@@ -266,16 +268,30 @@ export async function transferAdmin(adminId: string, householdId: string, target
     return { ok: false, error: "Escolha outro integrante da residência." };
   }
   const name = await nameOf(db, targetId);
-  await db.transaction(async (tx) => {
-    await tx
-      .update(householdMemberships)
-      .set({ role: "member" })
-      .where(and(eq(householdMemberships.householdId, householdId), eq(householdMemberships.memberId, adminId)));
-    await tx
-      .update(householdMemberships)
-      .set({ role: "admin" })
-      .where(and(eq(householdMemberships.householdId, householdId), eq(householdMemberships.memberId, targetId)));
-    await logMember(tx, { householdId, memberId: adminId, kind: "admin_transferred", subject: name });
-  });
+  await asService(() =>
+    getDb().transaction(async (tx) => {
+      await tx
+        .update(householdMemberships)
+        .set({ role: "member" })
+        .where(and(eq(householdMemberships.householdId, householdId), eq(householdMemberships.memberId, adminId)));
+      await tx
+        .update(householdMemberships)
+        .set({ role: "admin" })
+        .where(and(eq(householdMemberships.householdId, householdId), eq(householdMemberships.memberId, targetId)));
+      await logMember(tx, { householdId, memberId: adminId, kind: "admin_transferred", subject: name });
+    }),
+  );
   return { ok: true };
+}
+
+export function createHousehold(...args: Parameters<typeof createHouseholdImpl>) {
+  return asService(() => createHouseholdImpl(...args));
+}
+
+export function getInvitePreview(...args: Parameters<typeof getInvitePreviewImpl>) {
+  return asService(() => getInvitePreviewImpl(...args));
+}
+
+export function acceptInvite(...args: Parameters<typeof acceptInviteImpl>) {
+  return asService(() => acceptInviteImpl(...args));
 }

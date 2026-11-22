@@ -5,7 +5,7 @@ import { categories, financialAccounts, integrationConnections, transactions } f
 import { createTestDatabase, seedHousehold, shareWithMemberHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown }));
-vi.mock("@/db/client", () => ({ getDb: () => state.db }));
+vi.mock("@/db/client", () => ({ getDb: () => state.db, getServiceDb: () => state.db, asService: <T>(work: () => Promise<T>) => work() }));
 
 const { getAccountStatement } = await import("./statement");
 

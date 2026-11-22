@@ -1,6 +1,6 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, isNull, lt, ne, sql } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { asService, getDb } from "@/db/client";
 import {
   categories,
   categoryRules,
@@ -287,7 +287,7 @@ function describeError(error: unknown) {
   return "Não foi possível sincronizar agora. Tente novamente em instantes.";
 }
 
-export async function syncConnection(connectionId: string): Promise<SyncResult> {
+async function syncConnectionImpl(connectionId: string): Promise<SyncResult> {
   const db = getDb();
   const [connection] = await db
     .select({
@@ -455,7 +455,7 @@ export type SyncAllSummary = {
   results: { connectionId: string; result: SyncResult }[];
 };
 
-export async function syncAllConnections(): Promise<SyncAllSummary> {
+async function syncAllConnectionsImpl(): Promise<SyncAllSummary> {
   const connections = await getDb()
     .select({ id: integrationConnections.id })
     .from(integrationConnections)
@@ -496,4 +496,12 @@ export async function latestSyncRuns(connectionIds: string[]) {
     .where(inArray(syncRuns.connectionId, connectionIds))
     .orderBy(syncRuns.connectionId, desc(syncRuns.startedAt));
   return new Map(runs.map((run) => [run.connectionId, run]));
+}
+
+export function syncConnection(...args: Parameters<typeof syncConnectionImpl>) {
+  return asService(() => syncConnectionImpl(...args));
+}
+
+export function syncAllConnections(...args: Parameters<typeof syncAllConnectionsImpl>) {
+  return asService(() => syncAllConnectionsImpl(...args));
 }

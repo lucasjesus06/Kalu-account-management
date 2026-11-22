@@ -1,13 +1,13 @@
 import "server-only";
 import { asc, eq } from "drizzle-orm";
-import { getDb } from "@/db/client";
+import { asService, getDb } from "@/db/client";
 import { householdMembers, householdMemberships, households } from "@/db/schema";
 import type { HouseholdRole } from "@/domain/household";
 
 export type Profile = { memberId: string; displayName: string };
 export type HouseholdLink = { householdId: string; householdName: string; role: HouseholdRole };
 
-export async function ensureProfile(userId: string, displayName: string): Promise<Profile> {
+async function ensureProfileImpl(userId: string, displayName: string): Promise<Profile> {
   const db = getDb();
   const find = async () => {
     const [profile] = await db
@@ -49,4 +49,8 @@ export async function listHouseholdMembers(householdId: string) {
 
 export async function updateDisplayName(memberId: string, name: string) {
   await getDb().update(householdMembers).set({ displayName: name }).where(eq(householdMembers.id, memberId));
+}
+
+export function ensureProfile(...args: Parameters<typeof ensureProfileImpl>) {
+  return asService(() => ensureProfileImpl(...args));
 }

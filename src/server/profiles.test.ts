@@ -5,7 +5,7 @@ import { householdMembers, householdMemberships, households } from "@/db/schema"
 import { createTestDatabase, seedHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown }));
-vi.mock("@/db/client", () => ({ getDb: () => state.db }));
+vi.mock("@/db/client", () => ({ getDb: () => state.db, getServiceDb: () => state.db, asService: <T>(work: () => Promise<T>) => work() }));
 
 const { ensureProfile, listHouseholdLinks } = await import("./profiles");
 

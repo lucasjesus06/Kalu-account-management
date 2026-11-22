@@ -4,7 +4,7 @@ import { householdScope, personalScope } from "@/domain/scope";
 import { createTestDatabase, seedHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown }));
-vi.mock("@/db/client", () => ({ getDb: () => state.db }));
+vi.mock("@/db/client", () => ({ getDb: () => state.db, getServiceDb: () => state.db, asService: <T>(work: () => Promise<T>) => work() }));
 
 const { acceptInvite, createHousehold, createInvite, getInvitePreview, leaveHousehold, listManagedHouseholds, removeMember, revokeInvite, transferAdmin } =
   await import("./households");

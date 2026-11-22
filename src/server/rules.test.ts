@@ -4,7 +4,7 @@ import { householdScope } from "@/domain/scope";
 import { createTestDatabase, seedHousehold, shareWithMemberHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown }));
-vi.mock("@/db/client", () => ({ getDb: () => state.db }));
+vi.mock("@/db/client", () => ({ getDb: () => state.db, getServiceDb: () => state.db, asService: <T>(work: () => Promise<T>) => work() }));
 
 const { deleteCategoryRule, deleteNatureRule, listKnownMerchants, listRules, saveCategoryRule, saveNatureRule } = await import("./rules");
 const { listChanges } = await import("./change-log");
