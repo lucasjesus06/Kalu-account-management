@@ -2,6 +2,7 @@
 
 import { refresh } from "next/cache";
 import { getCurrentMember } from "@/server/auth";
+import { evaluateBudgetAlerts } from "@/server/budget";
 import { correctCategory, correctionScopes, type CorrectionScope } from "@/server/categorization";
 import { correctExpenseNature } from "@/server/expense-nature";
 import type { FormState } from "../conexoes/actions";
@@ -46,6 +47,7 @@ export async function classifyTransactionAction(_prevState: FormState, formData:
     }
     messages.push(result.message);
   }
+  await evaluateBudgetAlerts(member.householdId, new Date()).catch((error) => console.error("Falha ao avaliar as metas", error));
   refresh();
   return { ok: true, message: messages.join(" ") };
 }
