@@ -49,7 +49,15 @@ O banco é um PostgreSQL gerenciado pelo Supabase, acessado com o [Drizzle ORM](
 
 Fluxo para alterar o banco: editar `src/db/schema.ts`, rodar `npm run db:generate -- --name=descricao`, revisar o SQL gerado em `drizzle/` e aplicar com `npm run db:migrate`.
 
-Todas as tabelas têm Row Level Security habilitado. A aplicação acessa o banco pelo servidor, e o RLS sem políticas bloqueia o acesso direto pela API pública do Supabase.
+### Isolamento no banco (RLS)
+
+Todas as tabelas têm Row Level Security e políticas (migração 0022). O isolamento não depende só do código da aplicação: o banco recusa o acesso mesmo que uma consulta esqueça o filtro.
+
+- **Papel `authenticated`:** a aplicação conecta como `postgres`, mas cada consulta de uma pessoa roda numa transação que faz `set local role authenticated` e grava o id do integrante em `app.member_id`. Esse papel não ignora o RLS. Quem chama a API pública do Supabase não tem `app.member_id`, então não enxerga nada.
+- **Quem vê o quê:** o titular vê e altera tudo das próprias contas. Quem divide uma residência vê só as contas compartilhadas com ela e pode ajustar "para quem" das transações, mas não cria, apaga nem altera contas, faturas ou conexões. Credenciais da Pluggy e inscrições de push são só do dono. Metas, regras da residência e histórico são dos integrantes. Convites e mudanças de papel são do administrador.
+- **Modo serviço:** sincronização, webhooks, cron, avisos de meta, criação de residência, convites e criação do perfil rodam com `asService`, que usa o papel `postgres`. Fora do modo serviço, uma consulta sem usuário identificado na requisição falha, em vez de abrir o acesso.
+- **Testes:** `src/db/rls.test.ts` tenta acessos cruzados no banco (ler dados de outra pessoa, forjar dono, entrar numa residência sozinho, mexer em conta compartilhada) e todos precisam falhar. Uma consulta nova que precise de acesso além do titular deve ganhar política e teste ali.
+- **Custo:** cada consulta de uma requisição roda em uma transação própria, com uma ida e volta a mais ao banco.
 
 ## Autenticação
 
