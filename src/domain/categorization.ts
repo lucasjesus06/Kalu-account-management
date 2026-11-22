@@ -4,6 +4,7 @@ import { normalizeDescription } from "./merchant";
 export type CategorizationMatch = { slug: CategorySlug; matchedBy: "merchant" | "provider" };
 
 const merchantRules: [RegExp, CategorySlug][] = [
+  [/\bMESMA TITULARIDADE\b|\bTRANSF(?:ERENCIA)? ENTRE CONTAS\b/, "transferencia-entre-contas-proprias"],
   [/\bUBER[ *]?EATS\b|\bIFOOD\b|^IFD\*|\bKEETA|\bRAPPI\b|\bAIQFOME\b|\bZE ?DELIVERY\b/, "restaurantes"],
   [/\bUBER|\b99 ?(?:RIDE|APP|POP|TAXI)\b|\bCABIFY\b|\bINDRIVE\b/, "transporte-por-aplicativo"],
   [/\bMC ?DONALDS?\b|\bBURGER ?KING\b|\bBK BRASIL\b|\bSUBWAY\b|\bHABIBS?\b|\bKFC\b|\bGIRAFFAS\b|\bBOBS\b|\bPOPEYES\b/, "fast-food"],
@@ -105,6 +106,10 @@ const providerCategories: Record<string, CategorySlug> = {
   Mobile: "internet-telefone",
   TV: "internet-telefone",
   Services: "servicos",
+  "Same person transfer": "transferencia-entre-contas-proprias",
+  "Same person transfer - Cash": "transferencia-entre-contas-proprias",
+  "Same person transfer - PIX": "transferencia-entre-contas-proprias",
+  "Same person transfer - TED": "transferencia-entre-contas-proprias",
 };
 
 export function categorize(transaction: { description: string; providerCategory: string | null }): CategorizationMatch | null {
