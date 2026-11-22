@@ -14,7 +14,7 @@ export async function MemberAvatars() {
   const members = await listHouseholdMembers(household.householdId);
 
   return (
-    <ul className="flex -space-x-1.5" aria-label="Integrantes da residência">
+    <ul className="hidden -space-x-1.5 sm:flex" aria-label="Integrantes da residência">
       {members.map(({ id, displayName }, index) => (
         <li
           key={id}
