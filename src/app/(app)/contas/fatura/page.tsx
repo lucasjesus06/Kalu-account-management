@@ -12,7 +12,7 @@ import type { CategoryGroup } from "@/domain/bill-details";
 import { fromCents } from "@/domain/money";
 import { formatIsoDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { getCurrentMember } from "@/server/auth";
+import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
 import { getCardBillDetail, OPEN_CYCLE } from "@/server/bills";
 import { listCategories } from "@/server/categorization";
 import { CategoryCorrectionProvider } from "../category-correction";
@@ -77,9 +77,10 @@ async function BillContent({ searchParams }: Pick<PageProps<"/contas/fatura">, "
   }
 
   const { cartao, ciclo } = await searchParams;
-  const [detail, categories] = await Promise.all([
+  const [detail, categories, members] = await Promise.all([
     getCardBillDetail(member.householdId, typeof cartao === "string" ? cartao : "", typeof ciclo === "string" ? ciclo : undefined),
     listCategories(),
+    listHouseholdMembers(member.householdId),
   ]);
   if (!detail) {
     notFound();
@@ -212,7 +213,7 @@ async function BillContent({ searchParams }: Pick<PageProps<"/contas/fatura">, "
         )}
       </p>
 
-      <CategoryCorrectionProvider categories={categories}>
+      <CategoryCorrectionProvider categories={categories} members={members}>
         <div className="grid items-start gap-4 lg:grid-cols-3">
           <Panel title="Por categoria" icon={Tags} className="lg:col-span-2">
             {detail.categories.length === 0 && unidentifiedCents <= 0 ? (

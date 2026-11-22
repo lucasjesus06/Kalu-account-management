@@ -12,7 +12,7 @@ import type { ComparisonRow } from "@/domain/consumption";
 import { fromCents } from "@/domain/money";
 import { formatDate, formatDateTime, formatMonth, formatPercent, formatPeriod } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { getCurrentMember } from "@/server/auth";
+import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
 import { listCategories } from "@/server/categorization";
 import { getConsumptionComparison } from "@/server/consumption";
 import { CategoryCorrectionProvider } from "../contas/category-correction";
@@ -111,7 +111,7 @@ async function AnalysisContent({ searchParams }: Pick<PageProps<"/analise">, "se
   }
 
   const { mes, comparar, categoria } = await searchParams;
-  const [comparison, categories] = await Promise.all([
+  const [comparison, categories, members] = await Promise.all([
     getConsumptionComparison(
       member.householdId,
       typeof mes === "string" ? mes : undefined,
@@ -119,6 +119,7 @@ async function AnalysisContent({ searchParams }: Pick<PageProps<"/analise">, "se
       new Date(),
     ),
     listCategories(),
+    listHouseholdMembers(member.householdId),
   ]);
   const { current, previous, periods, coverage, months } = comparison;
   const currentLabel = formatPeriod(periods.current);
@@ -239,7 +240,7 @@ async function AnalysisContent({ searchParams }: Pick<PageProps<"/analise">, "se
         </Table>
       </Panel>
 
-      <CategoryCorrectionProvider categories={categories}>
+      <CategoryCorrectionProvider categories={categories} members={members}>
         <Panel title="Por categoria" icon={List}>
           <ComparisonTable
             rows={comparison.byCategory}
