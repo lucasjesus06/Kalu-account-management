@@ -116,6 +116,10 @@ describe("detalhe da fatura", () => {
     expect(detail!.selected.key).toBe(OPEN_CYCLE);
   });
 
+  it("trata identificador inválido como cartão inexistente", async () => {
+    expect(await getCardBillDetail(householdId, "nao-e-uuid", undefined)).toBeNull();
+  });
+
   it("não mostra cartão de outra residência", async () => {
     const outra = await seedHousehold(db());
 

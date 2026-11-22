@@ -17,6 +17,7 @@ import {
   topMerchants,
   type BillLine,
 } from "@/domain/bill-details";
+import { UUID_PATTERN } from "./connections";
 import {
   composeClosedBills,
   composeOpenBill,
@@ -93,6 +94,9 @@ export async function listHouseholdCardBills(householdId: string) {
 export const OPEN_CYCLE = "aberta";
 
 export async function getCardBillDetail(householdId: string, accountId: string, cycleKey: string | undefined) {
+  if (!UUID_PATTERN.test(accountId)) {
+    return null;
+  }
   const db = getDb();
   const [account] = await db
     .select({
