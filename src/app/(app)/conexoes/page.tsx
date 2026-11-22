@@ -10,6 +10,7 @@ import { getCurrentMember } from "@/server/auth";
 import { formatDate, formatDateTime, formatTransactionChanges } from "@/lib/format";
 import { getCredentialsSummary, listConnections } from "@/server/connections";
 import { latestSyncRuns } from "@/server/sync";
+import { ConnectBankButton } from "./connect-bank-button";
 import { ConnectionForm } from "./connection-form";
 import { CredentialsForm } from "./credentials-form";
 import { SyncButton } from "./sync-button";
@@ -46,10 +47,7 @@ async function ConnectionsContent() {
         icon={Plug}
       >
         {connections.length === 0 ? (
-          <p className="text-muted-foreground">
-            Nenhum banco conectado. Cada banco conectado no Meu Pluggy aparece como um item em Connected Items, no
-            Dashboard da Pluggy.
-          </p>
+          <p className="text-muted-foreground">Nenhum banco conectado ainda.</p>
         ) : (
           <ul className="flex flex-col divide-y">
             {connections.map((connection) => {
@@ -75,7 +73,7 @@ async function ConnectionsContent() {
                     </div>
                     <StatusBadge tone={badge.tone}>{badge.label}</StatusBadge>
                   </div>
-                  {alert && <AuthorizationNotice institution={name} alert={alert} />}
+                  {alert && <AuthorizationNotice institution={name} alert={alert} showAction={false} />}
                   {connection.authorizationExpiresAt && !alert && (
                     <p className="text-sm text-muted-foreground">
                       Autorização válida até {formatDate(connection.authorizationExpiresAt)}
@@ -86,15 +84,41 @@ async function ConnectionsContent() {
                       Última tentativa em {formatDateTime(lastRun.startedAt)}: {lastRun.error}
                     </p>
                   )}
-                  <SyncButton connectionId={connection.id} />
+                  <div className="flex flex-wrap items-start gap-3">
+                    <SyncButton connectionId={connection.id} />
+                    <ConnectBankButton
+                      renewConnectionId={connection.id}
+                      variant="outline"
+                      disabled={!credentials}
+                      hidden={!alert && connection.status !== "expired" && connection.status !== "error"}
+                    >
+                      Renovar autorização
+                    </ConnectBankButton>
+                  </div>
                 </li>
               );
             })}
           </ul>
         )}
 
-        <div className="mt-6 border-t pt-6">
-          <ConnectionForm disabled={!credentials} />
+        <div className="mt-6 flex flex-col gap-4 border-t pt-6">
+          <div className="flex flex-col gap-1">
+            <h3 className="font-semibold">Conectar um banco</h3>
+            <p className="text-sm text-muted-foreground">
+              Abre a janela da Pluggy: escolha <strong className="text-foreground">MeuPluggy</strong> e autorize. O banco
+              precisa estar conectado antes no Meu Pluggy. Em seguida o Kalu já sincroniza os dados.
+            </p>
+          </div>
+          <ConnectBankButton disabled={!credentials}>Conectar banco</ConnectBankButton>
+          {!credentials && (
+            <p className="text-xs text-muted-foreground">Cadastre as credenciais da Pluggy para começar.</p>
+          )}
+          <details className="text-sm">
+            <summary className="cursor-pointer text-muted-foreground">Adicionar pelo Item ID</summary>
+            <div className="mt-4">
+              <ConnectionForm disabled={!credentials} />
+            </div>
+          </details>
         </div>
       </Panel>
 
