@@ -133,6 +133,17 @@ O valor oficial de cada fatura fechada vem da fonte. O Kalu explica esse valor c
 - A fatura aberta é formada pelas transações sem identificador de fatura. O pagamento da fatura anterior aparece nela e fica fora do total. Compras pendentes entram no total e são indicadas à parte.
 - O limite utilizado do cartão inclui faturas fechadas não pagas, a fatura aberta e parcelas futuras, e por isso não é apresentado como valor de fatura.
 
+### Tela da fatura
+
+Em **Contas**, cada cartão tem o atalho **Ver fatura por categoria**, que abre `/contas/fatura?cartao=<id>`. A tela mostra:
+
+- Os ciclos do cartão: a fatura aberta e as fechadas, da mais recente para a mais antiga (`&ciclo=<id da fatura na fonte>`).
+- Na fatura fechada: o total oficial, o valor pago e a situação (paga, parcialmente paga ou em aberto) e o valor não identificado pela fonte. O pagamento de uma fatura é procurado no ciclo seguinte, onde a fonte o lança.
+- Na fatura aberta: o total parcial, as compras pendentes e os créditos.
+- A distribuição por categoria. Cada categoria abre a lista das suas transações, e o valor não identificado aparece como uma linha própria, nunca distribuído entre as categorias.
+- Os maiores estabelecimentos, os créditos e estornos e as parcelas futuras, com o valor restante calculado a partir da parcela do ciclo.
+- A referência de data: a composição é feita pela competência da fatura, ou seja, pelo ciclo em que o banco cobrou cada compra.
+
 ## Categorização
 
 As categorias de gastos ficam na tabela `categories`, criada com a lista de `src/domain/categories.ts`. Cada transação guarda:
