@@ -5,6 +5,7 @@ import cardTransactionsFixture from "./__fixtures__/card-transactions.json";
 import {
   authenticate,
   createConnectToken,
+  ensureWebhook,
   getItem,
   listAccounts,
   listBills,
@@ -89,6 +90,57 @@ describe("createConnectToken", () => {
   it("recusa resposta sem token", async () => {
     vi.stubGlobal("fetch", respostaFalsa(200, {}));
     await expect(createConnectToken("chave-123")).rejects.toBeInstanceOf(PluggyRequestError);
+  });
+});
+
+describe("ensureWebhook", () => {
+  const URL_KALU = "https://kalu.example.com/api/webhooks/pluggy";
+  const headers = { "x-kalu-webhook-secret": "segredo" };
+
+  function pluggyComWebhooks(existentes: { id: string; url: string }[]) {
+    return vi.fn(async (url: string, init?: RequestInit) => {
+      if (!init?.method) {
+        return new Response(JSON.stringify({ page: 1, total: existentes.length, totalPages: 1, results: existentes }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ id: init.method === "POST" ? "novo-webhook" : url.split("/").pop(), url: URL_KALU }), {
+        status: init.method === "POST" ? 201 : 200,
+      });
+    });
+  }
+
+  it("cria o webhook para todos os eventos com o segredo nos cabeçalhos", async () => {
+    const fetch = pluggyComWebhooks([{ id: "de-outro-sistema", url: "https://outro.example.com/hook" }]);
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(ensureWebhook("chave-123", URL_KALU, headers)).resolves.toBe("novo-webhook");
+    const [url, init] = fetch.mock.calls[1] as [string, RequestInit];
+    expect(url).toBe("https://api.pluggy.ai/webhooks");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({ event: "all", url: URL_KALU, headers });
+  });
+
+  it("atualiza e reativa o webhook que já aponta para o Kalu, sem duplicar", async () => {
+    const fetch = pluggyComWebhooks([{ id: "existente", url: URL_KALU }]);
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(ensureWebhook("chave-123", URL_KALU, headers)).resolves.toBe("existente");
+    const [url, init] = fetch.mock.calls[1] as [string, RequestInit];
+    expect(url).toBe("https://api.pluggy.ai/webhooks/existente");
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(String(init.body))).toEqual({ event: "all", headers, enabled: true });
+  });
+
+  it("informa quando a Pluggy recusa o endereço", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_url: string, init?: RequestInit) =>
+        init?.method
+          ? new Response(JSON.stringify({ message: "url must be https" }), { status: 400 })
+          : new Response(JSON.stringify({ results: [] }), { status: 200 }),
+      ),
+    );
+
+    await expect(ensureWebhook("chave-123", URL_KALU, headers)).rejects.toMatchObject({ status: 400 });
   });
 });
 

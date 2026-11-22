@@ -13,6 +13,7 @@ import {
   type ConnectSession,
 } from "@/server/connections";
 import { syncConnection } from "@/server/sync";
+import { registerWebhook } from "@/server/webhook-registration";
 
 export type FormState = ActionResult | null;
 
@@ -100,4 +101,16 @@ export async function finishConnectAction(itemId: string, renewConnectionId?: st
     };
   }
   return { ok: true, message: `${registered.message} Sincronizado: ${formatTransactionChanges(sync.changes)}.` };
+}
+
+export async function registerWebhookAction(): Promise<FormState> {
+  const member = await getCurrentMember();
+  if (!member) {
+    return NOT_LINKED;
+  }
+  const result = await registerWebhook(member.memberId);
+  if (result.ok) {
+    refresh();
+  }
+  return result;
 }

@@ -14,6 +14,7 @@ import { ConnectBankButton } from "./connect-bank-button";
 import { ConnectionForm } from "./connection-form";
 import { CredentialsForm } from "./credentials-form";
 import { SyncButton } from "./sync-button";
+import { WebhookButton } from "./webhook-button";
 
 export const metadata: Metadata = {
   title: "Conexões · Kalu",
@@ -129,6 +130,22 @@ async function ConnectionsContent() {
             : "Informe o Client ID e o Client Secret da sua aplicação no Dashboard da Pluggy."}
         </p>
         <CredentialsForm hasCredentials={Boolean(credentials)} />
+
+        <div className="mt-6 flex flex-col gap-3 border-t pt-6">
+          <div className="flex flex-col gap-1">
+            <h3 className="font-semibold">Notificações da Pluggy</h3>
+            <p className="text-sm text-muted-foreground">
+              {credentials?.webhookRegisteredAt
+                ? `Ativas desde ${formatDate(credentials.webhookRegisteredAt)}. ${
+                    credentials.lastWebhookAt
+                      ? `Última notificação em ${formatDateTime(credentials.lastWebhookAt)}.`
+                      : "Nenhuma notificação recebida ainda."
+                  }`
+                : "Desativadas. Com elas, o Kalu sincroniza assim que a Pluggy atualiza um banco, sem esperar a sincronização diária."}
+            </p>
+          </div>
+          <WebhookButton active={Boolean(credentials?.webhookRegisteredAt)} disabled={!credentials} />
+        </div>
       </Panel>
     </div>
   );

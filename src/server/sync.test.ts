@@ -352,7 +352,7 @@ describe("trava de sincronização", () => {
 });
 
 describe("autorização expirada", () => {
-  const expiredMessage = "A autorização desta conexão expirou. Renove a conexão no Meu Pluggy para voltar a sincronizar.";
+  const expiredMessage = "A autorização desta conexão expirou. Renove a autorização em Conexões para voltar a sincronizar.";
 
   async function connectionStatus() {
     const [connection] = await db().select().from(integrationConnections);
