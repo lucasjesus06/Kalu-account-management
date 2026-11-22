@@ -25,7 +25,8 @@ export type PeriodSummary = {
   incomeCents: Cents;
   transfersOutCents: Cents;
   transfersInCents: Cents;
-  billPaymentsCents: Cents;
+  billPaymentsReceivedCents: Cents;
+  billPaymentsFromAccountsCents: Cents;
   uncategorizedCents: Cents;
   uncategorizedCount: number;
   pendingCount: number;
@@ -88,7 +89,8 @@ export function summarize(records: readonly ConsumptionRecord[], billTotals: rea
     incomeCents: 0,
     transfersOutCents: 0,
     transfersInCents: 0,
-    billPaymentsCents: 0,
+    billPaymentsReceivedCents: 0,
+    billPaymentsFromAccountsCents: 0,
     uncategorizedCents: 0,
     uncategorizedCount: 0,
     pendingCount: 0,
@@ -113,7 +115,11 @@ export function summarize(records: readonly ConsumptionRecord[], billTotals: rea
       continue;
     }
     if (nature === "bill_payment") {
-      summary.billPaymentsCents += record.amountCents;
+      if (record.accountKind === "credit_card") {
+        summary.billPaymentsReceivedCents += record.amountCents;
+      } else {
+        summary.billPaymentsFromAccountsCents += record.amountCents;
+      }
       continue;
     }
     if (nature === "transfer") {

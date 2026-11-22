@@ -87,7 +87,8 @@ describe("consumo da residência", () => {
       consumptionCents: 30000 + 4000 + 1500,
       purchasesCount: 3,
       incomeCents: 500000,
-      billPaymentsCents: 403477,
+      billPaymentsReceivedCents: 403477,
+      billPaymentsFromAccountsCents: 0,
       transfersOutCents: 15000,
       uncategorizedCents: 1500,
     });

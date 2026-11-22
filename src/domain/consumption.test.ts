@@ -65,6 +65,7 @@ describe("resumo do período", () => {
     record(1500, { ...checking, category: mercado, merchantName: "PADARIA" }),
     record(500000, { ...checking, direction: "inflow", description: "SALARIO" }),
     record(403477, { ...checking, providerCategory: "Credit card payment" }),
+    record(403477, { direction: "inflow", description: "PAGAMENTO DE FATURA" }),
     record(20000, { category: transferencia }),
     record(7000, { ...checking, direction: "inflow", category: transferencia }),
     record(99999, { occurredAt: new Date("2026-10-31T23:59:00-03:00") }),
@@ -73,7 +74,7 @@ describe("resumo do período", () => {
 
   const summary = summarize(records, billTotals, fullMonth("2026-11"));
 
-  it("consumo é compras menos estornos do período, sem transferências, pagamentos de fatura e entradas", () => {
+  it("consumo é compras menos estornos do período, sem transferências, pagamentos de fatura e entradas; o pagamento é contado em cada lado sem somar os dois", () => {
     expect(summary).toMatchObject({
       consumptionCents: 10000 + 30000 + 8000 - 2000 + 5000 + 1500,
       purchasesCount: 5,
@@ -81,7 +82,8 @@ describe("resumo do período", () => {
       refundsCents: 2000,
       refundsCount: 1,
       incomeCents: 500000,
-      billPaymentsCents: 403477,
+      billPaymentsReceivedCents: 403477,
+      billPaymentsFromAccountsCents: 403477,
       transfersOutCents: 20000,
       transfersInCents: 7000,
       uncategorizedCents: 5000,
