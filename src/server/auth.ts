@@ -3,17 +3,19 @@ import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
 import { getDb } from "@/db/client";
-import { householdMembers, households } from "@/db/schema";
+import { householdMembers } from "@/db/schema";
+import { displayNameFromEmail } from "@/domain/household";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { ensureProfile, listHouseholdLinks, type Profile } from "./profiles";
 
-export type CurrentMember = {
-  memberId: string;
-  displayName: string;
+export type CurrentProfile = Profile;
+
+export type CurrentMember = CurrentProfile & {
   householdId: string;
   householdName: string;
 };
 
-async function getAuthenticatedUserId() {
+async function getAuthenticatedUser() {
   await connection();
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase.auth.getClaims();
@@ -21,25 +23,19 @@ async function getAuthenticatedUserId() {
   if (!userId) {
     redirect("/login");
   }
-  return userId;
+  const email = typeof data?.claims?.email === "string" ? data.claims.email : null;
+  return { userId, email };
+}
+
+export async function getCurrentProfile(): Promise<CurrentProfile> {
+  const { userId, email } = await getAuthenticatedUser();
+  return ensureProfile(userId, displayNameFromEmail(email));
 }
 
 export async function getCurrentMember(): Promise<CurrentMember | null> {
-  const userId = await getAuthenticatedUserId();
-
-  const [member] = await getDb()
-    .select({
-      memberId: householdMembers.id,
-      displayName: householdMembers.displayName,
-      householdId: households.id,
-      householdName: households.name,
-    })
-    .from(householdMembers)
-    .innerJoin(households, eq(households.id, householdMembers.householdId))
-    .where(eq(householdMembers.userId, userId))
-    .limit(1);
-
-  return member ?? null;
+  const profile = await getCurrentProfile();
+  const [link] = await listHouseholdLinks(profile.memberId);
+  return link ? { ...profile, householdId: link.householdId, householdName: link.householdName } : null;
 }
 
 export async function listHouseholdMembers(householdId: string) {

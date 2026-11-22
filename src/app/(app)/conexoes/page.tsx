@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/panel";
 import { StatusBadge } from "@/components/status-badge";
 import { authorizationAlert } from "@/domain/authorization";
-import { getCurrentMember } from "@/server/auth";
+import { getCurrentProfile } from "@/server/auth";
 import { formatDate, formatDateTime, formatTransactionChanges } from "@/lib/format";
 import { getCredentialsSummary, listConnections } from "@/server/connections";
 import { latestSyncRuns } from "@/server/sync";
@@ -28,11 +28,8 @@ const statusBadges = {
 } as const;
 
 async function ConnectionsContent() {
-  const member = await getCurrentMember();
+  const member = await getCurrentProfile();
 
-  if (!member) {
-    return <p className="text-muted-foreground">Sua conta ainda não está vinculada a uma residência.</p>;
-  }
 
   const [credentials, connections] = await Promise.all([
     getCredentialsSummary(member.memberId),
