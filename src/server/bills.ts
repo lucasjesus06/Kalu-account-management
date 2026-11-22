@@ -1,6 +1,7 @@
 import "server-only";
 import { and, eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
+import { scopeAccountIds } from "./scope";
 import {
   categories,
   creditCardBills,
@@ -17,6 +18,7 @@ import {
   topMerchants,
   type BillLine,
 } from "@/domain/bill-details";
+import type { Scope } from "@/domain/scope";
 import { UUID_PATTERN } from "./connections";
 import {
   composeClosedBills,
@@ -40,14 +42,14 @@ function groupByAccount<T extends { accountId: string }>(rows: T[]) {
   return groups;
 }
 
-export async function listHouseholdCardBills(householdId: string) {
+export async function listCardBills(scope: Scope) {
   const db = getDb();
   const cards = await db
     .select({ id: financialAccounts.id })
     .from(financialAccounts)
     .innerJoin(integrationConnections, eq(integrationConnections.id, financialAccounts.connectionId))
     .innerJoin(householdMembers, eq(householdMembers.id, integrationConnections.memberId))
-    .where(and(eq(householdMembers.householdId, householdId), eq(financialAccounts.kind, "credit_card")));
+    .where(and(inArray(financialAccounts.id, scopeAccountIds(scope)), eq(financialAccounts.kind, "credit_card")));
 
   const result = new Map<string, CardBills>();
   if (cards.length === 0) {
@@ -94,7 +96,7 @@ export async function listHouseholdCardBills(householdId: string) {
 
 export const OPEN_CYCLE = "aberta";
 
-export async function getCardBillDetail(householdId: string, accountId: string, cycleKey: string | undefined) {
+export async function getCardBillDetail(scope: Scope, accountId: string, cycleKey: string | undefined) {
   if (!UUID_PATTERN.test(accountId)) {
     return null;
   }
@@ -114,7 +116,7 @@ export async function getCardBillDetail(householdId: string, accountId: string, 
       and(
         eq(financialAccounts.id, accountId),
         eq(financialAccounts.kind, "credit_card"),
-        eq(householdMembers.householdId, householdId),
+        inArray(financialAccounts.id, scopeAccountIds(scope)),
       ),
     );
   if (!account) {

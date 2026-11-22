@@ -31,7 +31,11 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (!isAuthenticated && !isPublicPath(pathname)) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    const login = new URL("/login", request.url);
+    if (pathname !== "/") {
+      login.searchParams.set("next", pathname + request.nextUrl.search);
+    }
+    return NextResponse.redirect(login);
   }
 
   if (isAuthenticated && pathname === "/login") {

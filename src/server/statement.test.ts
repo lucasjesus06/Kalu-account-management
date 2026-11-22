@@ -1,7 +1,8 @@
+import { householdScope } from "@/domain/scope";
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { categories, financialAccounts, integrationConnections, transactions } from "@/db/schema";
-import { createTestDatabase, seedHousehold } from "@/test/database";
+import { createTestDatabase, seedHousehold, shareWithMemberHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock("@/db/client", () => ({ getDb: () => state.db }));
@@ -32,6 +33,8 @@ beforeEach(async () => {
     .returning();
   checkingId = checking.id;
   cardId = card.id;
+  await shareWithMemberHousehold(db(), checkingId, lucas.id);
+  await shareWithMemberHousehold(db(), cardId, lucas.id);
   const [transfer] = await db().select().from(categories).where(eq(categories.slug, "transferencia-entre-integrantes"));
   const base = { accountId: checkingId, currency: "BRL", status: "posted" as const };
   await db()
@@ -46,7 +49,7 @@ beforeEach(async () => {
 
 describe("extrato da conta", () => {
   it("abre no mês mais recente, pelo fuso de Brasília, com o resumo sem transferências e sem pagamento de fatura", async () => {
-    const statement = await getAccountStatement(householdId, checkingId, undefined);
+    const statement = await getAccountStatement(householdScope(householdId), checkingId, undefined);
 
     expect(statement!.months).toEqual(["2026-11", "2026-10"]);
     expect(statement!.selectedMonth).toBe("2026-11");
@@ -66,16 +69,16 @@ describe("extrato da conta", () => {
   });
 
   it("mostra o mês pedido e volta para o mais recente quando o mês é inválido", async () => {
-    expect((await getAccountStatement(householdId, checkingId, "2026-10"))!.lines.map((l) => l.description)).toEqual(["MERCADO"]);
-    expect((await getAccountStatement(householdId, checkingId, "2026-13"))!.selectedMonth).toBe("2026-11");
-    expect((await getAccountStatement(householdId, checkingId, "2025-01"))!.selectedMonth).toBe("2026-11");
+    expect((await getAccountStatement(householdScope(householdId), checkingId, "2026-10"))!.lines.map((l) => l.description)).toEqual(["MERCADO"]);
+    expect((await getAccountStatement(householdScope(householdId), checkingId, "2026-13"))!.selectedMonth).toBe("2026-11");
+    expect((await getAccountStatement(householdScope(householdId), checkingId, "2025-01"))!.selectedMonth).toBe("2026-11");
   });
 
   it("não abre cartão, conta de outra residência nem identificador inválido", async () => {
     const outra = await seedHousehold(db());
 
-    expect(await getAccountStatement(householdId, cardId, undefined)).toBeNull();
-    expect(await getAccountStatement(outra.household.id, checkingId, undefined)).toBeNull();
-    expect(await getAccountStatement(householdId, "nao-e-uuid", undefined)).toBeNull();
+    expect(await getAccountStatement(householdScope(householdId), cardId, undefined)).toBeNull();
+    expect(await getAccountStatement(householdScope(outra.household.id), checkingId, undefined)).toBeNull();
+    expect(await getAccountStatement(householdScope(householdId), "nao-e-uuid", undefined)).toBeNull();
   });
 });

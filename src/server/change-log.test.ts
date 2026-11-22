@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { categories, financialAccounts, integrationConnections, transactions } from "@/db/schema";
-import { createTestDatabase, seedHousehold } from "@/test/database";
+import { createTestDatabase, seedHousehold, shareWithMemberHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock("@/db/client", () => ({ getDb: () => state.db }));
@@ -32,6 +32,7 @@ async function newAccount(memberId: string) {
     .insert(financialAccounts)
     .values({ connectionId: connection.id, externalId: `conta-${sequence}`, kind: "credit_card", name: "Cartão", currency: "BRL", balanceCents: 0 })
     .returning();
+  await shareWithMemberHousehold(db(), account.id, memberId);
   return account.id;
 }
 

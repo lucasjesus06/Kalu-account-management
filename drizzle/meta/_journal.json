@@ -134,6 +134,20 @@
       "when": 1795374844581,
       "tag": "0018_perfil_e_participacao_em_residencias",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795376610025,
+      "tag": "0019_compartilhamento_de_contas",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795378203042,
+      "tag": "0020_convites_de_residencia",
+      "breakpoints": true
     }
   ]
 }

@@ -13,7 +13,7 @@ import { expenseNatureKey } from "@/domain/expense-nature";
 import { fromCents } from "@/domain/money";
 import { formatDate, formatDateTime, formatMonth, formatPercent, formatPeriod } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
+import { getCurrentContext, listHouseholdMembers } from "@/server/auth";
 import { listCategories } from "@/server/categorization";
 import { getConsumptionComparison } from "@/server/consumption";
 import { CategoryCorrectionProvider } from "../contas/category-correction";
@@ -106,21 +106,18 @@ function ComparisonTable({
 }
 
 async function AnalysisContent({ searchParams }: Pick<PageProps<"/analise">, "searchParams">) {
-  const member = await getCurrentMember();
-  if (!member) {
-    return <p className="text-muted-foreground">Sua conta ainda não está vinculada a uma residência.</p>;
-  }
+  const { scope, household } = await getCurrentContext();
 
   const { mes, comparar, categoria, para } = await searchParams;
   const [comparison, categories, members] = await Promise.all([
     getConsumptionComparison(
-      member.householdId,
+      scope,
       typeof mes === "string" ? mes : undefined,
       typeof comparar === "string" ? comparar : undefined,
       new Date(),
     ),
     listCategories(),
-    listHouseholdMembers(member.householdId),
+    household ? listHouseholdMembers(household.householdId) : [],
   ]);
   const { current, previous, periods, coverage, months } = comparison;
   const currentLabel = formatPeriod(periods.current);

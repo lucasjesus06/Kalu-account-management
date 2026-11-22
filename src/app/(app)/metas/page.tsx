@@ -1,3 +1,4 @@
+import { householdScope } from "@/domain/scope";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -45,7 +46,7 @@ async function GoalsContent({ searchParams }: Pick<PageProps<"/metas">, "searchP
     listAlerts(member.householdId),
     listCategories(),
     listHouseholdMembers(member.householdId),
-    availableMonths(member.householdId),
+    availableMonths(householdScope(member.householdId)),
     countMemberSubscriptions(member.memberId),
   ]);
   const isCurrent = month === currentMonth;

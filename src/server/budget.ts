@@ -15,6 +15,7 @@ import { goalSummary } from "@/domain/change-log";
 import { parseExpenseChoice } from "@/domain/expense-nature";
 import { fromCents } from "@/domain/money";
 import { fullMonth, monthOf, shiftMonth } from "@/domain/periods";
+import { householdScope } from "@/domain/scope";
 import { formatBRL } from "@/lib/format";
 import { UUID_PATTERN, type ActionResult } from "./connections";
 import { recordChange } from "./change-log";
@@ -59,7 +60,7 @@ export async function evaluateBudgetAlerts(householdId: string, now: Date) {
     return 0;
   }
   const period = fullMonth(month);
-  const { records, billTotals } = await loadConsumptionRecords(householdId, period);
+  const { records, billTotals } = await loadConsumptionRecords(householdScope(householdId), period);
   const values = goals.flatMap((goal) => {
     const progress = goalProgress(goal, records, billTotals, period);
     return progress.reached.map((threshold) => ({
@@ -88,7 +89,7 @@ export async function getBudgetOverview(householdId: string, month: string) {
   const period = fullMonth(month);
   const [goals, { records, billTotals }] = await Promise.all([
     listGoals(householdId, month),
-    loadConsumptionRecords(householdId, period),
+    loadConsumptionRecords(householdScope(householdId), period),
   ]);
   return goals.map((goal) => ({ goal, label: goalLabel(goal), progress: goalProgress(goal, records, billTotals, period) }));
 }

@@ -363,3 +363,47 @@ export const pushSubscriptions = pgTable(
     index("push_subscriptions_member_idx").on(table.memberId),
   ],
 ).enableRLS();
+
+export const householdSharedAccounts = pgTable(
+  "household_shared_accounts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => financialAccounts.id, { onDelete: "cascade" }),
+    sharedByMemberId: uuid("shared_by_member_id")
+      .notNull()
+      .references(() => householdMembers.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("household_shared_accounts_account_idx").on(table.accountId),
+    index("household_shared_accounts_household_idx").on(table.householdId),
+  ],
+).enableRLS();
+
+export const householdInvites = pgTable(
+  "household_invites",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    householdId: uuid("household_id")
+      .notNull()
+      .references(() => households.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull(),
+    createdByMemberId: uuid("created_by_member_id")
+      .notNull()
+      .references(() => householdMembers.id, { onDelete: "cascade" }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    usedByMemberId: uuid("used_by_member_id").references(() => householdMembers.id, { onDelete: "set null" }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("household_invites_token_hash_idx").on(table.tokenHash),
+    index("household_invites_household_idx").on(table.householdId),
+  ],
+).enableRLS();

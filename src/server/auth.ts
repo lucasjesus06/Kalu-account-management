@@ -1,12 +1,12 @@
 import "server-only";
-import { eq } from "drizzle-orm";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { connection } from "next/server";
-import { getDb } from "@/db/client";
-import { householdMembers } from "@/db/schema";
 import { displayNameFromEmail } from "@/domain/household";
+import { resolveScope, SCOPE_COOKIE, type Scope } from "@/domain/scope";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { ensureProfile, listHouseholdLinks, type Profile } from "./profiles";
+import type { Editor } from "./expense-nature";
+import { ensureProfile, listHouseholdLinks, type HouseholdLink, type Profile } from "./profiles";
 
 export type CurrentProfile = Profile;
 
@@ -32,16 +32,37 @@ export async function getCurrentProfile(): Promise<CurrentProfile> {
   return ensureProfile(userId, displayNameFromEmail(email));
 }
 
-export async function getCurrentMember(): Promise<CurrentMember | null> {
+export type CurrentContext = {
+  profile: CurrentProfile;
+  households: HouseholdLink[];
+  scope: Scope;
+  household: HouseholdLink | null;
+  editor: Editor;
+};
+
+export async function getCurrentContext(): Promise<CurrentContext> {
   const profile = await getCurrentProfile();
-  const [link] = await listHouseholdLinks(profile.memberId);
+  const households = await listHouseholdLinks(profile.memberId);
+  const choice = (await cookies()).get(SCOPE_COOKIE)?.value;
+  const scope = resolveScope(
+    choice,
+    profile.memberId,
+    households.map((link) => link.householdId),
+  );
+  const household = scope.kind === "household" ? (households.find((link) => link.householdId === scope.householdId) ?? null) : null;
+  return {
+    profile,
+    households,
+    scope,
+    household,
+    editor: { memberId: profile.memberId, householdId: household?.householdId ?? null },
+  };
+}
+
+export async function getCurrentMember(): Promise<CurrentMember | null> {
+  const { profile, households, household } = await getCurrentContext();
+  const link = household ?? households[0];
   return link ? { ...profile, householdId: link.householdId, householdName: link.householdName } : null;
 }
 
-export async function listHouseholdMembers(householdId: string) {
-  return getDb()
-    .select({ id: householdMembers.id, displayName: householdMembers.displayName })
-    .from(householdMembers)
-    .where(eq(householdMembers.householdId, householdId))
-    .orderBy(householdMembers.createdAt);
-}
+export { listHouseholdMembers } from "./profiles";

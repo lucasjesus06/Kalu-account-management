@@ -1,15 +1,17 @@
 import "server-only";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { categories, financialAccounts, householdMembers, integrationConnections, transactions } from "@/db/schema";
 import { summarizeStatement, type StatementLine } from "@/domain/statement";
+import type { Scope } from "@/domain/scope";
 import { UUID_PATTERN } from "./connections";
 import { expenseMembers, expenseSelection, joinExpenseMember } from "./expense-nature";
+import { scopeAccountIds } from "./scope";
 
 const TIME_ZONE = "America/Sao_Paulo";
 const MONTH_PATTERN = /^\d{4}-(?:0[1-9]|1[0-2])$/;
 
-export async function getAccountStatement(householdId: string, accountId: string, month: string | undefined) {
+export async function getAccountStatement(scope: Scope, accountId: string, month: string | undefined) {
   if (!UUID_PATTERN.test(accountId)) {
     return null;
   }
@@ -30,7 +32,7 @@ export async function getAccountStatement(householdId: string, accountId: string
       and(
         eq(financialAccounts.id, accountId),
         ne(financialAccounts.kind, "credit_card"),
-        eq(householdMembers.householdId, householdId),
+        inArray(financialAccounts.id, scopeAccountIds(scope)),
       ),
     );
   if (!account) {

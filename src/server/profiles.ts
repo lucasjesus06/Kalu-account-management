@@ -37,3 +37,12 @@ export async function listHouseholdLinks(memberId: string): Promise<HouseholdLin
     .where(eq(householdMemberships.memberId, memberId))
     .orderBy(asc(householdMemberships.createdAt), asc(householdMemberships.id));
 }
+
+export async function listHouseholdMembers(householdId: string) {
+  return getDb()
+    .select({ id: householdMembers.id, displayName: householdMembers.displayName })
+    .from(householdMemberships)
+    .innerJoin(householdMembers, eq(householdMembers.id, householdMemberships.memberId))
+    .where(eq(householdMemberships.householdId, householdId))
+    .orderBy(asc(householdMemberships.createdAt), asc(householdMemberships.id));
+}

@@ -12,6 +12,7 @@ import {
   type ActionResult,
   type ConnectSession,
 } from "@/server/connections";
+import { shareAccount } from "@/server/sharing";
 import { syncConnection } from "@/server/sync";
 import { registerWebhook } from "@/server/webhook-registration";
 
@@ -57,6 +58,16 @@ export async function syncConnectionAction(_prevState: FormState, formData: Form
     return result;
   }
   return { ok: true, message: `Sincronizado: ${formatTransactionChanges(result.changes)}.` };
+}
+
+export async function shareAccountAction(_prevState: FormState, formData: FormData): Promise<FormState> {
+  const member = await getCurrentProfile();
+
+  const result = await shareAccount(member.memberId, field(formData, "accountId"), field(formData, "householdId"));
+  if (result.ok) {
+    refresh();
+  }
+  return result;
 }
 
 export async function startConnectAction(renewConnectionId?: string): Promise<ConnectSession> {

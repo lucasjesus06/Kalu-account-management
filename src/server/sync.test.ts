@@ -1,3 +1,4 @@
+import { householdScope, personalScope } from "@/domain/scope";
 import { randomBytes } from "node:crypto";
 import { asc, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -25,8 +26,8 @@ vi.mock("@/db/client", () => ({ getDb: () => state.db }));
 
 const { encrypt } = await import("./crypto");
 const { latestSyncRuns, syncAllConnections, syncConnection } = await import("./sync");
-const { listHouseholdAccounts } = await import("./accounts");
-const { listHouseholdCardBills } = await import("./bills");
+const { listAccounts } = await import("./accounts");
+const { listCardBills } = await import("./bills");
 
 type TestDb = Awaited<ReturnType<typeof createTestDatabase>>;
 const db = () => state.db as TestDb;
@@ -49,6 +50,7 @@ let fixtures: Fixtures;
 let connectionId: string;
 let householdId: string;
 let karinaId: string;
+let lucasId: string;
 
 function simulatePluggy() {
   vi.stubGlobal(
@@ -84,6 +86,7 @@ beforeEach(async () => {
   const { household, lucas, karina } = await seedHousehold(db());
   householdId = household.id;
   karinaId = karina.id;
+  lucasId = lucas.id;
   await db()
     .insert(pluggyCredentials)
     .values({ memberId: lucas.id, clientId: "593ce5a5-bd0f-47d1-af52-50d0acb74bee", clientSecretEncrypted: encrypt("segredo") });
@@ -303,11 +306,11 @@ describe("perfil sem residência", () => {
   });
 });
 
-describe("listHouseholdAccounts", () => {
+describe("listAccounts", () => {
   it("lista as contas da residência com titular e totais importados", async () => {
     await syncConnection(connectionId);
 
-    const accounts = await listHouseholdAccounts(householdId);
+    const accounts = await listAccounts(personalScope(lucasId));
 
     expect(
       accounts.map((a) => ({
@@ -329,7 +332,7 @@ describe("listHouseholdAccounts", () => {
     await syncConnection(connectionId);
     const { household: outra } = await seedHousehold(db());
 
-    expect(await listHouseholdAccounts(outra.id)).toEqual([]);
+    expect(await listAccounts(householdScope(outra.id))).toEqual([]);
   });
 });
 
@@ -463,7 +466,7 @@ describe("listHouseholdCardBills", () => {
     await syncConnection(connectionId);
     const [card] = await db().select().from(financialAccounts).where(eq(financialAccounts.externalId, CARD_ID));
 
-    const bills = await listHouseholdCardBills(householdId);
+    const bills = await listCardBills(personalScope(lucasId));
 
     expect([...bills.keys()]).toEqual([card.id]);
     const { open, closed } = bills.get(card.id)!;
@@ -479,7 +482,7 @@ describe("listHouseholdCardBills", () => {
     await syncConnection(connectionId);
     const outra = await seedHousehold(db());
 
-    expect((await listHouseholdCardBills(outra.household.id)).size).toBe(0);
+    expect((await listCardBills(personalScope(outra.lucas.id))).size).toBe(0);
   });
 });
 

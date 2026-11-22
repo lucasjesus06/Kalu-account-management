@@ -11,18 +11,11 @@ import {
 } from "@/db/schema";
 import { compareBreakdowns, summarize, type ConsumptionRecord } from "@/domain/consumption";
 import { comparablePeriods, isMonth, monthOf, shiftMonth, type Period } from "@/domain/periods";
+import type { Scope } from "@/domain/scope";
 import { expenseMembers, expenseSelection, joinExpenseMember } from "./expense-nature";
+import { scopeAccountIds } from "./scope";
 
-function householdAccounts(householdId: string) {
-  return getDb()
-    .select({ id: financialAccounts.id })
-    .from(financialAccounts)
-    .innerJoin(integrationConnections, eq(integrationConnections.id, financialAccounts.connectionId))
-    .innerJoin(householdMembers, eq(householdMembers.id, integrationConnections.memberId))
-    .where(eq(householdMembers.householdId, householdId));
-}
-
-export async function loadConsumptionRecords(householdId: string, range?: Period) {
+export async function loadConsumptionRecords(scope: Scope, range?: Period) {
   const db = getDb();
   const [rows, bills] = await Promise.all([
     db
@@ -59,7 +52,7 @@ export async function loadConsumptionRecords(householdId: string, range?: Period
       .leftJoin(creditCardBills, eq(creditCardBills.id, transactions.billId))
       .where(
         and(
-          eq(householdMembers.householdId, householdId),
+          inArray(financialAccounts.id, scopeAccountIds(scope)),
           range ? gte(transactions.occurredAt, range.start) : undefined,
           range ? lt(transactions.occurredAt, range.end) : undefined,
         ),
@@ -68,7 +61,7 @@ export async function loadConsumptionRecords(householdId: string, range?: Period
     db
       .select({ totalCents: creditCardBills.totalCents })
       .from(creditCardBills)
-      .where(inArray(creditCardBills.accountId, householdAccounts(householdId))),
+      .where(inArray(creditCardBills.accountId, scopeAccountIds(scope))),
   ]);
 
   const records: ConsumptionRecord[] = rows.map(({ categorySlug, categoryName, categoryKind, ...row }) => ({
@@ -78,18 +71,18 @@ export async function loadConsumptionRecords(householdId: string, range?: Period
   return { records, billTotals: bills.map((bill) => bill.totalCents) };
 }
 
-export async function getDataCoverage(householdId: string) {
+export async function getDataCoverage(scope: Scope) {
   const db = getDb();
   const [[transactionRange], [sync], [balances]] = await Promise.all([
     db
       .select({ first: min(transactions.occurredAt), last: max(transactions.occurredAt), total: count() })
       .from(transactions)
-      .where(inArray(transactions.accountId, householdAccounts(householdId))),
+      .where(inArray(transactions.accountId, scopeAccountIds(scope))),
     db
       .select({ lastSyncedAt: max(integrationConnections.lastSyncedAt) })
       .from(integrationConnections)
-      .innerJoin(householdMembers, eq(householdMembers.id, integrationConnections.memberId))
-      .where(eq(householdMembers.householdId, householdId)),
+      .innerJoin(financialAccounts, eq(financialAccounts.connectionId, integrationConnections.id))
+      .where(inArray(financialAccounts.id, scopeAccountIds(scope))),
     db
       .select({
         balanceCents: sql<number>`coalesce(sum(${financialAccounts.balanceCents}) filter (where ${financialAccounts.kind} <> 'credit_card'), 0)`.mapWith(Number),
@@ -97,7 +90,7 @@ export async function getDataCoverage(householdId: string) {
         creditLimitCents: sql<number>`coalesce(sum(${financialAccounts.creditLimitCents}) filter (where ${financialAccounts.kind} = 'credit_card'), 0)`.mapWith(Number),
       })
       .from(financialAccounts)
-      .where(inArray(financialAccounts.id, householdAccounts(householdId))),
+      .where(inArray(financialAccounts.id, scopeAccountIds(scope))),
   ]);
   return {
     firstTransactionAt: transactionRange.first,
@@ -108,18 +101,18 @@ export async function getDataCoverage(householdId: string) {
   };
 }
 
-export async function availableMonths(householdId: string) {
+export async function availableMonths(scope: Scope) {
   const monthExpression = sql<string>`to_char(${transactions.occurredAt} at time zone 'America/Sao_Paulo', 'YYYY-MM')`;
   const rows = await getDb()
     .selectDistinct({ month: monthExpression })
     .from(transactions)
-    .where(inArray(transactions.accountId, householdAccounts(householdId)))
+    .where(inArray(transactions.accountId, scopeAccountIds(scope)))
     .orderBy(desc(monthExpression));
   return rows.map((row) => row.month);
 }
 
 export async function getConsumptionComparison(
-  householdId: string,
+  scope: Scope,
   month: string | undefined,
   compareTo: string | undefined,
   now: Date,
@@ -133,9 +126,9 @@ export async function getConsumptionComparison(
     end: new Date(Math.max(periods.current.end.getTime(), periods.previous.end.getTime())),
   };
   const [{ records, billTotals }, months, coverage] = await Promise.all([
-    loadConsumptionRecords(householdId, range),
-    availableMonths(householdId),
-    getDataCoverage(householdId),
+    loadConsumptionRecords(scope, range),
+    availableMonths(scope),
+    getDataCoverage(scope),
   ]);
   const current = summarize(records, billTotals, periods.current);
   const previous = summarize(records, billTotals, periods.previous);

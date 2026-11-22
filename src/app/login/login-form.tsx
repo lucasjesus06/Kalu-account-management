@@ -8,11 +8,12 @@ import { signIn, type SignInState } from "./actions";
 
 const initialState: SignInState = {};
 
-export function LoginForm() {
+export function LoginForm({ next }: { next: string }) {
   const [state, formAction, pending] = useActionState(signIn, initialState);
 
   return (
     <form action={formAction} className="flex flex-col gap-5">
+      <input type="hidden" name="next" value={next} />
       <div className="flex flex-col gap-2">
         <Label htmlFor="email">E-mail</Label>
         <Input

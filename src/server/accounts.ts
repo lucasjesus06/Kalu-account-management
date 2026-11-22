@@ -8,8 +8,10 @@ import {
   integrationConnections,
   transactions,
 } from "@/db/schema";
+import type { Scope } from "@/domain/scope";
+import { scopeAccountIds } from "./scope";
 
-export async function listHouseholdAccounts(householdId: string) {
+export async function listAccounts(scope: Scope) {
   const db = getDb();
   const accounts = await db
     .select({
@@ -29,7 +31,7 @@ export async function listHouseholdAccounts(householdId: string) {
     .from(financialAccounts)
     .innerJoin(integrationConnections, eq(integrationConnections.id, financialAccounts.connectionId))
     .innerJoin(householdMembers, eq(householdMembers.id, integrationConnections.memberId))
-    .where(eq(householdMembers.householdId, householdId))
+    .where(inArray(financialAccounts.id, scopeAccountIds(scope)))
     .orderBy(asc(householdMembers.displayName), asc(integrationConnections.institutionName), asc(financialAccounts.kind));
 
   if (accounts.length === 0) {
