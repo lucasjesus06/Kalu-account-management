@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getCurrentProfile } from "@/server/auth";
 import { acceptInvite } from "@/server/households";
@@ -11,5 +12,6 @@ export async function acceptInviteAction(_prevState: FormState, formData: FormDa
   if (!result.ok) {
     return result;
   }
+  revalidatePath("/", "layout");
   redirect("/configuracoes/familia");
 }
