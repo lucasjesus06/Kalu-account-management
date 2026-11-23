@@ -16,6 +16,7 @@ export function ScopeSelect({
   return (
     <form ref={formRef} action={action}>
       <select
+        key={value}
         name="scope"
         aria-label="Espaço financeiro"
         defaultValue={value}
