@@ -1,7 +1,8 @@
 import "server-only";
 import { and, eq } from "drizzle-orm";
 import { asService, getDb } from "@/db/client";
-import { integrationConnections, pluggyCredentials, webhookEvents } from "@/db/schema";
+import { integrationConnections, webhookEvents } from "@/db/schema";
+import { pluggyAppClientId } from "./pluggy-app";
 import { SYNC_ALREADY_RUNNING, syncConnection } from "./sync";
 
 export type PluggyWebhookPayload = {
@@ -72,14 +73,13 @@ async function decide(payload: PluggyWebhookPayload): Promise<Outcome> {
   }
   const db = getDb();
   const [connection] = await db
-    .select({ id: integrationConnections.id, clientId: pluggyCredentials.clientId })
+    .select({ id: integrationConnections.id })
     .from(integrationConnections)
-    .leftJoin(pluggyCredentials, eq(pluggyCredentials.memberId, integrationConnections.memberId))
     .where(and(eq(integrationConnections.provider, "pluggy"), eq(integrationConnections.externalItemId, payload.itemId)));
   if (!connection) {
     return { result: "ignored", detail: "Item sem conexão no Kalu.", connectionId: null };
   }
-  if (payload.clientId && payload.clientId !== connection.clientId) {
+  if (payload.clientId && payload.clientId !== pluggyAppClientId()) {
     return { result: "ignored", detail: "Client ID diferente do cadastrado.", connectionId: connection.id };
   }
 

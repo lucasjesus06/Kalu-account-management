@@ -13,7 +13,6 @@ import {
   householdSharedAccounts,
   households,
   integrationConnections,
-  pluggyCredentials,
   pushSubscriptions,
   transactions,
   webhookEvents,
@@ -92,7 +91,6 @@ beforeAll(async () => {
   privateTransaction = await transaction(lucasPrivate, "t-privada");
   anaTransaction = await transaction(anaAccount, "t-ana");
   await db.insert(creditCardBills).values({ accountId: lucasShared, externalId: "f1", dueDate: "2026-12-10", totalCents: 100, currency: "BRL" });
-  await db.insert(pluggyCredentials).values({ memberId: lucas, clientId: "id", clientSecretEncrypted: "segredo" });
   await db.insert(pushSubscriptions).values({ memberId: lucas, endpoint: "https://push/lucas", p256dh: "k", auth: "a" });
   await db.insert(categoryRules).values({ ownerMemberId: lucas, merchantName: "LOJA", categoryId: category });
   await db.insert(categoryRules).values({ householdId: casa, merchantName: "MERCADO", categoryId: category });
@@ -110,7 +108,6 @@ describe("quem é de fora não enxerga nada", () => {
     ["financial_accounts", financialAccounts],
     ["credit_card_bills", creditCardBills],
     ["integration_connections", integrationConnections],
-    ["pluggy_credentials", pluggyCredentials],
     ["push_subscriptions", pushSubscriptions],
     ["category_rules", categoryRules],
     ["budget_goals", budgetGoals],
@@ -157,7 +154,6 @@ describe("contas e transações", () => {
   });
 
   it("não vê credenciais nem inscrições do colega, e a conexão só enquanto há conta compartilhada", async () => {
-    expect(await as(karina, (tx) => count(tx, pluggyCredentials))).toBe(0);
     expect(await as(karina, (tx) => count(tx, pushSubscriptions))).toBe(0);
     expect(await as(karina, (tx) => count(tx, integrationConnections))).toBe(1);
     await as(karina, (tx) => tx.update(integrationConnections).set({ status: "revoked" }));

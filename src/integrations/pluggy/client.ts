@@ -98,12 +98,12 @@ async function send<T>(apiKey: string, method: "POST" | "PATCH", path: string, b
   return (await response.json()) as T;
 }
 
-export async function createConnectToken(apiKey: string, itemId?: string) {
+export async function createConnectToken(apiKey: string, itemId?: string, clientUserId?: string) {
   const body = await send<{ accessToken?: unknown }>(
     apiKey,
     "POST",
     "/connect_token",
-    { ...(itemId ? { itemId } : {}), options: { avoidDuplicates: true } },
+    { ...(itemId ? { itemId } : {}), options: { avoidDuplicates: true, ...(clientUserId ? { clientUserId } : {}) } },
     "Item",
   );
   if (typeof body.accessToken !== "string" || !body.accessToken) {

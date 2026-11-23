@@ -1,9 +1,7 @@
 import "server-only";
-import { eq } from "drizzle-orm";
-import { getDb } from "@/db/client";
-import { pluggyCredentials } from "@/db/schema";
 import { ensureWebhook, PluggyAuthError, PluggyRequestError } from "@/integrations/pluggy/client";
-import { loadApiKey, type ActionResult } from "./connections";
+import type { ActionResult } from "./connections";
+import { appApiKey, forgetAppApiKey, PluggyNotConfiguredError } from "./pluggy-app";
 import { WEBHOOK_SECRET_HEADER } from "./webhook-auth";
 
 export const WEBHOOK_PATH = "/api/webhooks/pluggy";
@@ -21,7 +19,7 @@ export function webhookUrl(env: Record<string, string | undefined> = process.env
   }
 }
 
-export async function registerWebhook(memberId: string): Promise<ActionResult> {
+export async function registerWebhook(): Promise<ActionResult> {
   const secret = process.env.PLUGGY_WEBHOOK_SECRET;
   if (!secret) {
     return { ok: false, error: "Configure a variável PLUGGY_WEBHOOK_SECRET antes de ativar as notificações." };
@@ -31,16 +29,15 @@ export async function registerWebhook(memberId: string): Promise<ActionResult> {
     return { ok: false, error: "As notificações precisam do Kalu publicado em HTTPS. Configure APP_URL com o endereço publicado." };
   }
 
-  let webhookId: string;
   try {
-    const apiKey = await loadApiKey(memberId);
-    if (!apiKey) {
-      return { ok: false, error: "Cadastre suas credenciais da Pluggy antes de ativar as notificações." };
-    }
-    webhookId = await ensureWebhook(apiKey, url, { [WEBHOOK_SECRET_HEADER]: secret });
+    await ensureWebhook(await appApiKey(), url, { [WEBHOOK_SECRET_HEADER]: secret });
   } catch (error) {
+    if (error instanceof PluggyNotConfiguredError) {
+      return { ok: false, error: "A conexão com bancos ainda não foi ativada neste ambiente." };
+    }
     if (error instanceof PluggyAuthError) {
-      return { ok: false, error: "Suas credenciais deixaram de ser aceitas pela Pluggy. Cadastre-as novamente." };
+      forgetAppApiKey();
+      return { ok: false, error: "A Pluggy recusou as credenciais do Kalu." };
     }
     if (error instanceof PluggyRequestError && error.status === 400) {
       return { ok: false, error: `A Pluggy recusou o endereço ${url}. Ele precisa ser público e em HTTPS.` };
@@ -48,10 +45,5 @@ export async function registerWebhook(memberId: string): Promise<ActionResult> {
     console.error("Falha ao cadastrar webhook na Pluggy", error);
     return { ok: false, error: "Não foi possível falar com a Pluggy agora. Tente novamente em instantes." };
   }
-
-  await getDb()
-    .update(pluggyCredentials)
-    .set({ webhookId, webhookRegisteredAt: new Date() })
-    .where(eq(pluggyCredentials.memberId, memberId));
   return { ok: true, message: "Notificações da Pluggy ativadas." };
 }

@@ -104,30 +104,23 @@ Rotas protegidas redirecionam para `/login` quem não estiver autenticado. As p�
 
 ## Conexões com a Pluggy
 
-Cada integrante cadastra as próprias credenciais da Pluggy e os próprios bancos na tela **Conexões**.
+As credenciais da Pluggy pertencem ao Kalu, não a quem usa. Quem publica o app configura uma vez, e cada pessoa só clica em **Adicionar banco** na tela **Conexões**.
 
-1. Gere a chave de criptografia e coloque o resultado em `ENCRYPTION_KEY` (no `.env.local` e na Vercel):
+1. No [Dashboard da Pluggy](https://dashboard.pluggy.ai), copie o **Client ID** e o **Client Secret** da aplicação e coloque em `PLUGGY_CLIENT_ID` e `PLUGGY_CLIENT_SECRET` (no `.env.local` e na Vercel).
+2. Na tela **Conexões**, **Adicionar banco** abre a janela de conexão (Pluggy Connect) dentro do Kalu. O Kalu cria um token temporário no servidor, então o secret nunca vai para o navegador.
+3. Ao concluir, a conexão é registrada, a primeira sincronização roda e as notificações da Pluggy (webhook) são ativadas sozinhas, se `APP_URL` e `PLUGGY_WEBHOOK_SECRET` estiverem configurados.
+4. As contas, faturas e transações aparecem na tela **Contas**.
 
-```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
-```
-
-2. No [Meu Pluggy](https://meu.pluggy.ai), conecte os bancos.
-3. Na tela **Conexões** do Kalu, informe o **Client ID** e o **Client Secret** da aplicação, do [Dashboard da Pluggy](https://dashboard.pluggy.ai). Eles são validados na Pluggy antes de serem salvos, e o secret fica criptografado (AES-256-GCM) no banco.
-4. Clique em **Conectar banco**. O Kalu cria um token de conexão temporário no servidor (o secret nunca vai para o navegador) e abre a janela da Pluggy (Pluggy Connect). Escolha **MeuPluggy** e autorize. A conexão é registrada e a primeira sincronização roda em seguida.
-5. As contas, faturas e transações aparecem na tela **Contas**.
-
-Ainda é possível adicionar um banco pelo **Item ID** (em **Adicionar pelo Item ID**), copiado de **Connected Items** no Dashboard.
+Quais bancos aparecem na janela depende do plano da aplicação na Pluggy. Com a conta gratuita, o caminho é o conector **MeuPluggy**, que lê os bancos já conectados no [Meu Pluggy](https://meu.pluggy.ai). Com conectores diretos habilitados no Dashboard, a pessoa escolhe o banco e autoriza na própria janela, sem sair do Kalu.
 
 ### Renovação da autorização
 
-A autorização do Meu Pluggy vale um ano e só pode ser renovada por quem entra no Meu Pluggy; a sincronização automática não consegue renová-la. Quando a autorização está perto de vencer, expirou ou a conexão está com erro, a conexão mostra **Renovar autorização**: a janela da Pluggy abre já vinculada ao item (`updateItem`), e depois de autorizar a conexão volta para **Ativa**, com a nova validade, e é sincronizada. Se a Pluggy devolver outro item na renovação, a mesma conexão do Kalu passa a apontar para ele.
+A autorização vale um ano; a sincronização automática não consegue renová-la. Quando a autorização está perto de vencer, expirou ou a conexão está com erro, a conexão mostra **Renovar autorização**: a janela da Pluggy abre já vinculada ao item (`updateItem`), e depois de autorizar a conexão volta para **Ativa**, com a nova validade, e é sincronizada. Se a Pluggy devolver outro item na renovação, a mesma conexão do Kalu passa a apontar para ele.
 
 Os avisos de vencimento no Início levam para a tela **Conexões**.
 
 `NEXT_PUBLIC_PLUGGY_CONNECT_URL` é opcional e só serve para apontar o widget para um ambiente de testes; sem ela, é usado o endereço oficial da Pluggy.
 
-A `ENCRYPTION_KEY` não pode ser trocada sem cadastrar as credenciais de novo: os secrets salvos só podem ser lidos com a chave que os criptografou.
 
 ## Sincronização
 
@@ -167,7 +160,7 @@ Quando uma meta cruza uma faixa, o Kalu manda uma notificação para os aparelho
 Com as notificações ativas, o Kalu sincroniza assim que a Pluggy avisa que algo mudou, sem esperar o agendamento diário (que continua como garantia).
 
 - **Rota**: `POST /api/webhooks/pluggy`, pública no proxy. Ela responde em seguida (a Pluggy espera resposta 2xx em até 10 segundos) e processa depois da resposta, com `after()` do Next.js.
-- **Autenticidade**: toda notificação precisa trazer o cabeçalho `X-Kalu-Webhook-Secret` com o valor de `PLUGGY_WEBHOOK_SECRET`, cadastrado na Pluggy junto com o webhook. Se `PLUGGY_WEBHOOK_SIGNING_SECRET` estiver configurado (segredo `whsec_...` gerado no Dashboard), a assinatura `X-Pluggy-Signature` (HMAC-SHA256 de `t.corpo`, com no máximo 5 minutos de diferença) também é exigida. Sem isso, a resposta é `401`, que a Pluggy não reenvia. O `clientId` da notificação precisa ser o das credenciais do integrante dono do item.
+- **Autenticidade**: toda notificação precisa trazer o cabeçalho `X-Kalu-Webhook-Secret` com o valor de `PLUGGY_WEBHOOK_SECRET`, cadastrado na Pluggy junto com o webhook. Se `PLUGGY_WEBHOOK_SIGNING_SECRET` estiver configurado (segredo `whsec_...` gerado no Dashboard), a assinatura `X-Pluggy-Signature` (HMAC-SHA256 de `t.corpo`, com no máximo 5 minutos de diferença) também é exigida. Sem isso, a resposta é `401`, que a Pluggy não reenvia. O `clientId` da notificação precisa ser o `PLUGGY_CLIENT_ID` do Kalu.
 - **Eventos**: `item/created`, `item/updated`, `item/error` e `transactions/*` disparam a sincronização da conexão (que consulta a Pluggy com a chave da API e detecta autorização expirada); `item/deleted` marca a conexão como revogada; os demais são ignorados.
 - **Sem repetição**: cada notificação fica em `webhook_events` pelo `eventId`, com o resultado (`synced`, `revoked`, `ignored` ou `failed`) e o detalhe. Uma entrega repetida não é processada de novo.
 - **Ativação**: em **Conexões**, **Ativar notificações** cadastra o webhook na Pluggy (evento `all`, com o segredo nos cabeçalhos) ou atualiza e reativa o que já aponta para o Kalu. Exige o Kalu publicado em HTTPS (`APP_URL` ou o domínio de produção da Vercel). A tela mostra desde quando estão ativas e a última notificação recebida.
@@ -406,7 +399,8 @@ Os testes de integração rodam contra um PostgreSQL em memória ([PGlite](https
 | `SUPABASE_SECRET_KEY` | Chave secreta do Supabase, somente no servidor |
 | `DATABASE_URL` | Conexão da aplicação com o PostgreSQL, pelo pooler do Supabase em modo transação (porta 6543) |
 | `DATABASE_MIGRATION_URL` | Conexão usada pelas migrations, pelo pooler do Supabase em modo sessão (porta 5432) |
-| `ENCRYPTION_KEY` | Chave de criptografia das credenciais da Pluggy |
+| `PLUGGY_CLIENT_ID` | Client ID da aplicação, do Dashboard da Pluggy |
+| `PLUGGY_CLIENT_SECRET` | Client Secret da aplicação. Fica só no servidor |
 | `APP_URL` | Endereço público do Kalu, usado no cadastro do webhook. Na Vercel, se vazio, usa o domínio de produção |
 | `PLUGGY_WEBHOOK_SECRET` | Segredo que a Pluggy envia em cada notificação |
 | `PLUGGY_WEBHOOK_SIGNING_SECRET` | Opcional: segredo de assinatura gerado no Dashboard da Pluggy |
@@ -414,7 +408,6 @@ Os testes de integração rodam contra um PostgreSQL em memória ([PGlite](https
 | `CRON_SECRET` | Protege a rota da sincronização diária. Gere com `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` e configure na Vercel |
 | `PLUGGY_API_URL` | Opcional. Endereço da API da Pluggy; vazio usa `https://api.pluggy.ai`. Serve para apontar para um servidor simulado em testes |
 
-As credenciais da Pluggy não ficam em variáveis de ambiente: cada integrante cadastra as suas, que são guardadas criptografadas no banco.
 
 ## Estrutura
 

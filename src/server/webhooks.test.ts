@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { integrationConnections, pluggyCredentials, webhookEvents } from "@/db/schema";
+import { integrationConnections, webhookEvents } from "@/db/schema";
 import { createTestDatabase, seedHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown, sync: vi.fn() }));
@@ -36,7 +36,7 @@ beforeEach(async () => {
   state.db = await createTestDatabase();
   state.sync.mockReset().mockResolvedValue({ ok: true });
   const { lucas } = await seedHousehold(db());
-  await db().insert(pluggyCredentials).values({ memberId: lucas.id, clientId: CLIENT_ID, clientSecretEncrypted: "x" });
+  vi.stubEnv("PLUGGY_CLIENT_ID", CLIENT_ID);
   const [connection] = await db()
     .insert(integrationConnections)
     .values({ memberId: lucas.id, externalItemId: ITEM_ID, institutionName: "Santander" })

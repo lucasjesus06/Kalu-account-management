@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { KeyRound, Plug } from "lucide-react";
+import { Plug } from "lucide-react";
 import { AuthorizationNotice } from "@/components/authorization-notice";
 import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/panel";
@@ -8,13 +8,11 @@ import { StatusBadge } from "@/components/status-badge";
 import { authorizationAlert } from "@/domain/authorization";
 import { getRenderProfile } from "@/server/auth";
 import { formatDate, formatDateTime, formatTransactionChanges } from "@/lib/format";
-import { getCredentialsSummary, listConnections } from "@/server/connections";
+import { listConnections } from "@/server/connections";
+import { pluggyAppCredentials } from "@/server/pluggy-app";
 import { latestSyncRuns } from "@/server/sync";
 import { ConnectBankButton } from "./connect-bank-button";
-import { ConnectionForm } from "./connection-form";
-import { CredentialsForm } from "./credentials-form";
 import { SyncButton } from "./sync-button";
-import { WebhookButton } from "./webhook-button";
 
 export const metadata: Metadata = {
   title: "Conexões · Kalu",
@@ -29,23 +27,25 @@ const statusBadges = {
 
 async function ConnectionsContent() {
   const member = await getRenderProfile();
-
-
-  const [credentials, connections] = await Promise.all([
-    getCredentialsSummary(member.memberId),
-    listConnections(member.memberId),
-  ]);
+  const connections = await listConnections(member.memberId);
+  const available = pluggyAppCredentials() !== null;
   const runs = await latestSyncRuns(connections.map((connection) => connection.id));
   const now = new Date();
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-2">
+    <div className="mx-auto w-full max-w-2xl">
       <Panel
         title={connections.length === 1 ? "1 instituição" : `${connections.length} instituições`}
         icon={Plug}
       >
         {connections.length === 0 ? (
-          <p className="text-muted-foreground">Nenhum banco conectado ainda.</p>
+          <div className="mb-6 flex flex-col gap-1">
+            <p className="font-medium">Nenhum banco conectado ainda</p>
+            <p className="text-sm text-muted-foreground">
+              Adicione seu banco para o Kalu montar suas faturas e gastos. Uma janela segura abre aqui mesmo para você
+              escolher o banco e autorizar. No primeiro acesso, a janela guia você para criar o seu Meu Pluggy, gratuito, onde ficam as autorizações dos seus bancos.
+            </p>
+          </div>
         ) : (
           <ul className="flex flex-col divide-y">
             {connections.map((connection) => {
@@ -87,7 +87,7 @@ async function ConnectionsContent() {
                     <ConnectBankButton
                       renewConnectionId={connection.id}
                       variant="outline"
-                      disabled={!credentials}
+                      disabled={!available}
                       hidden={!alert && connection.status !== "expired" && connection.status !== "error"}
                     >
                       Renovar autorização
@@ -99,49 +99,13 @@ async function ConnectionsContent() {
           </ul>
         )}
 
-        <div className="mt-6 flex flex-col gap-4 border-t pt-6">
-          <div className="flex flex-col gap-1">
-            <h3 className="font-semibold">Conectar um banco</h3>
-            <p className="text-sm text-muted-foreground">
-              Abre a janela da Pluggy: escolha <strong className="text-foreground">MeuPluggy</strong> e autorize. O banco
-              precisa estar conectado antes no Meu Pluggy. Em seguida o Kalu já sincroniza os dados.
-            </p>
-          </div>
-          <ConnectBankButton disabled={!credentials}>Conectar banco</ConnectBankButton>
-          {!credentials && (
-            <p className="text-xs text-muted-foreground">Cadastre as credenciais da Pluggy para começar.</p>
+        <div className={connections.length === 0 ? "" : "mt-6 border-t pt-6"}>
+          <ConnectBankButton variant={connections.length === 0 ? "default" : "outline"} disabled={!available}>
+            Adicionar banco
+          </ConnectBankButton>
+          {!available && (
+            <p className="mt-3 text-sm text-muted-foreground">A conexão com bancos ainda não foi ativada neste ambiente.</p>
           )}
-          <details className="text-sm">
-            <summary className="cursor-pointer text-muted-foreground">Adicionar pelo Item ID</summary>
-            <div className="mt-4">
-              <ConnectionForm disabled={!credentials} />
-            </div>
-          </details>
-        </div>
-      </Panel>
-
-      <Panel title="Credenciais da Pluggy" icon={KeyRound}>
-        <p className="mb-5 text-sm text-muted-foreground">
-          {credentials
-            ? `Client ID ${credentials.clientId.slice(0, 8)}… · atualizadas em ${formatDate(credentials.updatedAt)}`
-            : "Informe o Client ID e o Client Secret da sua aplicação no Dashboard da Pluggy."}
-        </p>
-        <CredentialsForm hasCredentials={Boolean(credentials)} />
-
-        <div className="mt-6 flex flex-col gap-3 border-t pt-6">
-          <div className="flex flex-col gap-1">
-            <h3 className="font-semibold">Notificações da Pluggy</h3>
-            <p className="text-sm text-muted-foreground">
-              {credentials?.webhookRegisteredAt
-                ? `Ativas desde ${formatDate(credentials.webhookRegisteredAt)}. ${
-                    credentials.lastWebhookAt
-                      ? `Última notificação em ${formatDateTime(credentials.lastWebhookAt)}.`
-                      : "Nenhuma notificação recebida ainda."
-                  }`
-                : "Desativadas. Com elas, o Kalu sincroniza assim que a Pluggy atualiza um banco, sem esperar a sincronização diária."}
-            </p>
-          </div>
-          <WebhookButton active={Boolean(credentials?.webhookRegisteredAt)} disabled={!credentials} />
         </div>
       </Panel>
     </div>

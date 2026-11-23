@@ -4,10 +4,8 @@ import { refresh } from "next/cache";
 import { formatTransactionChanges } from "@/lib/format";
 import { getCurrentProfile } from "@/server/auth";
 import {
-  addConnection,
   listConnections,
   registerConnectedItem,
-  saveCredentials,
   startConnectSession,
   type ActionResult,
   type ConnectSession,
@@ -20,26 +18,6 @@ export type FormState = ActionResult | null;
 
 function field(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim();
-}
-
-export async function saveCredentialsAction(_prevState: FormState, formData: FormData): Promise<FormState> {
-  const member = await getCurrentProfile();
-
-  const result = await saveCredentials(member.memberId, field(formData, "clientId"), field(formData, "clientSecret"));
-  if (result.ok) {
-    refresh();
-  }
-  return result;
-}
-
-export async function addConnectionAction(_prevState: FormState, formData: FormData): Promise<FormState> {
-  const member = await getCurrentProfile();
-
-  const result = await addConnection(member.memberId, field(formData, "itemId"));
-  if (result.ok) {
-    refresh();
-  }
-  return result;
 }
 
 export async function syncConnectionAction(_prevState: FormState, formData: FormData): Promise<FormState> {
@@ -84,6 +62,7 @@ export async function finishConnectAction(itemId: string, renewConnectionId?: st
   }
 
   const sync = await syncConnection(registered.connectionId);
+  await registerWebhook().catch(() => undefined);
   refresh();
   if (!sync.ok) {
     return {
@@ -92,13 +71,4 @@ export async function finishConnectAction(itemId: string, renewConnectionId?: st
     };
   }
   return { ok: true, message: `${registered.message} Sincronizado: ${formatTransactionChanges(sync.changes)}.` };
-}
-
-export async function registerWebhookAction(): Promise<FormState> {
-  const member = await getCurrentProfile();
-  const result = await registerWebhook(member.memberId);
-  if (result.ok) {
-    refresh();
-  }
-  return result;
 }
