@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { integrationConnections } from "@/db/schema";
-import { createConnectToken, getItem, PluggyAuthError, PluggyNotFoundError } from "@/integrations/pluggy/client";
+import { createConnectToken, findConnectorId, getItem, PluggyAuthError, PluggyNotFoundError } from "@/integrations/pluggy/client";
 import { defaultAuthorizationExpiry } from "@/domain/authorization";
 import { appApiKey, forgetAppApiKey, PluggyNotConfiguredError } from "./pluggy-app";
 
@@ -58,7 +58,9 @@ async function fetchItem(itemId: string) {
   }
 }
 
-export type ConnectSession = { ok: true; connectToken: string; updateItem: string | null } | { ok: false; error: string };
+export type ConnectSession =
+  | { ok: true; connectToken: string; updateItem: string | null; connectorId: number | null }
+  | { ok: false; error: string };
 
 async function findOwnConnection(memberId: string, connectionId: string) {
   if (!UUID_PATTERN.test(connectionId)) {
@@ -69,6 +71,19 @@ async function findOwnConnection(memberId: string, connectionId: string) {
     .from(integrationConnections)
     .where(and(eq(integrationConnections.id, connectionId), eq(integrationConnections.memberId, memberId)));
   return connection;
+}
+
+let meuPluggyConnectorId: number | null = null;
+
+async function lookupMeuPluggyConnector(apiKey: string) {
+  if (meuPluggyConnectorId === null) {
+    meuPluggyConnectorId = await findConnectorId(apiKey, "MeuPluggy").catch(() => null);
+  }
+  return meuPluggyConnectorId;
+}
+
+export function forgetMeuPluggyConnector() {
+  meuPluggyConnectorId = null;
 }
 
 export async function startConnectSession(memberId: string, renewConnectionId?: string): Promise<ConnectSession> {
@@ -82,7 +97,10 @@ export async function startConnectSession(memberId: string, renewConnectionId?: 
   }
 
   try {
-    return { ok: true, connectToken: await createConnectToken(await appApiKey(), updateItem ?? undefined, memberId), updateItem };
+    const apiKey = await appApiKey();
+    const connectToken = await createConnectToken(apiKey, updateItem ?? undefined, memberId);
+    const connectorId = updateItem ? null : await lookupMeuPluggyConnector(apiKey);
+    return { ok: true, connectToken, updateItem, connectorId };
   } catch (error) {
     return pluggyFailure(error, "A conexão que você quer renovar não foi encontrada na Pluggy.");
   }

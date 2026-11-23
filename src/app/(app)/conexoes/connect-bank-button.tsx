@@ -44,6 +44,7 @@ export function ConnectBankButton({
       const widget = new PluggyConnect({
         connectToken: session.connectToken,
         ...(session.updateItem ? { updateItem: session.updateItem } : {}),
+        ...(session.connectorId ? { selectedConnectorId: session.connectorId } : {}),
         ...(process.env.NEXT_PUBLIC_PLUGGY_CONNECT_URL ? { url: process.env.NEXT_PUBLIC_PLUGGY_CONNECT_URL } : {}),
         theme: "dark",
         language: "pt",

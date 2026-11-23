@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({ db: undefined as unknown }));
 
 vi.mock("@/db/client", () => ({ getDb: () => state.db, getServiceDb: () => state.db, asService: <T>(work: () => Promise<T>) => work() }));
 
-const { listConnections, registerConnectedItem, startConnectSession } = await import("./connections");
+const { forgetMeuPluggyConnector, listConnections, registerConnectedItem, startConnectSession } = await import("./connections");
 const { forgetAppApiKey } = await import("./pluggy-app");
 
 const CLIENT_ID = "593ce5a5-bd0f-47d1-af52-50d0acb74bee";
@@ -55,12 +55,16 @@ describe("conectar banco pelo Kalu", () => {
       if (url.endsWith("/connect_token")) {
         return { status: 200, body: { accessToken: "token-de-conexao" } };
       }
+      if (url.includes("/connectors")) {
+        return { status: 200, body: { results: [{ id: 7, name: "Outro Banco" }, { id: 200, name: "Meu Pluggy" }] } };
+      }
       return { status: 200, body: { id: itemId, connector: { name: "Nubank" }, ...(consentExpiresAt ? { consentExpiresAt } : {}) } };
     };
   }
 
   beforeEach(() => {
     pedidos.length = 0;
+    forgetMeuPluggyConnector();
   });
 
   it("abre a sessão de conexão com um token, sem expor o secret", async () => {
@@ -68,11 +72,19 @@ describe("conectar banco pelo Kalu", () => {
 
     const session = await startConnectSession(membros.lucas.id);
 
-    expect(session).toEqual({ ok: true, connectToken: "token-de-conexao", updateItem: null });
+    expect(session).toEqual({ ok: true, connectToken: "token-de-conexao", updateItem: null, connectorId: 200 });
     expect(pedidos.find((p) => p.url.endsWith("/connect_token"))?.body).toMatchObject({
       options: { avoidDuplicates: true, clientUserId: membros.lucas.id },
     });
     expect(JSON.stringify(session)).not.toContain("segredo");
+  });
+
+  it("segue sem atalho quando o conector Meu Pluggy não é encontrado", async () => {
+    simularPluggy((url, init) =>
+      url.includes("/connectors") ? { status: 200, body: { results: [] } } : pluggyConnect()(url, init),
+    );
+
+    expect(await startConnectSession(membros.lucas.id)).toMatchObject({ ok: true, connectorId: null });
   });
 
   it("avisa quando a conexão com bancos não foi ativada no ambiente", async () => {
@@ -108,7 +120,7 @@ describe("conectar banco pelo Kalu", () => {
     const session = await startConnectSession(membros.lucas.id, connection.id);
     const result = await registerConnectedItem(membros.lucas.id, ITEM_ID, connection.id);
 
-    expect(session).toEqual({ ok: true, connectToken: "token-de-conexao", updateItem: ITEM_ID });
+    expect(session).toEqual({ ok: true, connectToken: "token-de-conexao", updateItem: ITEM_ID, connectorId: null });
     expect(pedidos.find((p) => p.url.endsWith("/connect_token"))?.body).toMatchObject({ itemId: ITEM_ID });
     expect(result).toEqual({ ok: true, message: "Autorização de Nubank renovada.", connectionId: connection.id });
     expect((await listConnections(membros.lucas.id))[0]).toMatchObject({
