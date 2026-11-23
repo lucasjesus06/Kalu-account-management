@@ -1,4 +1,4 @@
-import { getCurrentContext, listHouseholdMembers } from "@/server/auth";
+import { getRenderContext, getRenderHouseholdMembers } from "@/server/auth";
 import { cn } from "@/lib/utils";
 
 function initials(name: string) {
@@ -6,12 +6,12 @@ function initials(name: string) {
 }
 
 export async function MemberAvatars() {
-  const { profile, household } = await getCurrentContext();
+  const { profile, household } = await getRenderContext();
   if (!household) {
     return null;
   }
 
-  const members = await listHouseholdMembers(household.householdId);
+  const members = await getRenderHouseholdMembers(household.householdId);
 
   return (
     <ul className="hidden -space-x-1.5 sm:flex" aria-label="Integrantes da residência">

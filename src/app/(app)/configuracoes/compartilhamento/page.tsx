@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { getCurrentProfile } from "@/server/auth";
+import { getRenderProfile } from "@/server/auth";
 import { listHouseholdLinks } from "@/server/profiles";
 import { listOwnAccounts } from "@/server/sharing";
 import { ShareAccountForm } from "./share-account-form";
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 const kindLabels = { checking: "Conta corrente", savings: "Poupança", credit_card: "Cartão de crédito", other: "Outra conta" } as const;
 
 async function SharingContent() {
-  const profile = await getCurrentProfile();
+  const profile = await getRenderProfile();
   const [accounts, households] = await Promise.all([listOwnAccounts(profile.memberId), listHouseholdLinks(profile.memberId)]);
 
   return (

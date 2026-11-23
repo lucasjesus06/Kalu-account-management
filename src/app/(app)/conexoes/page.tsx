@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/panel";
 import { StatusBadge } from "@/components/status-badge";
 import { authorizationAlert } from "@/domain/authorization";
-import { getCurrentProfile } from "@/server/auth";
+import { getRenderProfile } from "@/server/auth";
 import { formatDate, formatDateTime, formatTransactionChanges } from "@/lib/format";
 import { getCredentialsSummary, listConnections } from "@/server/connections";
 import { latestSyncRuns } from "@/server/sync";
@@ -28,7 +28,7 @@ const statusBadges = {
 } as const;
 
 async function ConnectionsContent() {
-  const member = await getCurrentProfile();
+  const member = await getRenderProfile();
 
 
   const [credentials, connections] = await Promise.all([

@@ -12,7 +12,7 @@ import { expenseChoiceOf } from "@/domain/expense-nature";
 import { fromCents } from "@/domain/money";
 import { isMonth, monthOf } from "@/domain/periods";
 import { formatDateTime, formatMonth } from "@/lib/format";
-import { getCurrentMember, listHouseholdMembers } from "@/server/auth";
+import { getRenderMember, getRenderHouseholdMembers } from "@/server/auth";
 import { getBudgetOverview, listAlerts } from "@/server/budget";
 import { countMemberSubscriptions, vapidPublicKey } from "@/server/push";
 import { listCategories } from "@/server/categorization";
@@ -33,7 +33,7 @@ function limitInput(cents: number) {
 }
 
 async function GoalsContent({ searchParams }: Pick<PageProps<"/metas">, "searchParams">) {
-  const member = await getCurrentMember();
+  const member = await getRenderMember();
   if (!member) {
     return <p className="text-muted-foreground">Sua conta ainda não está vinculada a uma residência.</p>;
   }
@@ -45,7 +45,7 @@ async function GoalsContent({ searchParams }: Pick<PageProps<"/metas">, "searchP
     getBudgetOverview(member.householdId, month),
     listAlerts(member.householdId),
     listCategories(),
-    listHouseholdMembers(member.householdId),
+    getRenderHouseholdMembers(member.householdId),
     availableMonths(householdScope(member.householdId)),
     countMemberSubscriptions(member.memberId),
   ]);

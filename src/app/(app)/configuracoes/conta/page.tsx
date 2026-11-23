@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { LogOut } from "lucide-react";
 import { signOut } from "@/app/login/actions";
 import { Button } from "@/components/ui/button";
-import { getAccountEmail, getCurrentProfile } from "@/server/auth";
+import { getAccountEmail, getRenderProfile } from "@/server/auth";
 import { PasswordForm, RenameForm } from "./account-forms";
 
 export const metadata: Metadata = {
@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 };
 
 async function AccountContent() {
-  const [profile, email] = await Promise.all([getCurrentProfile(), getAccountEmail()]);
+  const [profile, email] = await Promise.all([getRenderProfile(), getAccountEmail()]);
 
   return (
     <div className="flex flex-col gap-10">

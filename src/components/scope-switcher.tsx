@@ -1,10 +1,10 @@
 import { PERSONAL_CHOICE, scopeChoice } from "@/domain/scope";
 import { setScopeAction } from "@/app/(app)/escopo/actions";
-import { getCurrentContext } from "@/server/auth";
+import { getRenderContext } from "@/server/auth";
 import { ScopeSelect } from "./scope-select";
 
 export async function ScopeSwitcher() {
-  const { households, scope } = await getCurrentContext();
+  const { households, scope } = await getRenderContext();
   if (households.length === 0) {
     return null;
   }

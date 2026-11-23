@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { AddDialog } from "@/components/add-dialog";
-import { getCurrentContext } from "@/server/auth";
+import { getRenderContext } from "@/server/auth";
 import { listCategories } from "@/server/categorization";
 import { listKnownMerchants, listRules } from "@/server/rules";
 import { CategoryRuleRow, NatureRuleRow, NewRuleForm } from "./rule-forms";
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 async function RulesContent() {
-  const { profile, household, scope } = await getCurrentContext();
+  const { profile, household, scope } = await getRenderContext();
   const [rules, categories, merchants] = await Promise.all([
     listRules(profile.memberId, household?.householdId ?? null),
     listCategories(),
