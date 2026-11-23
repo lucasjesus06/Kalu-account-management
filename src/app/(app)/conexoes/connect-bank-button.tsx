@@ -8,8 +8,8 @@ import { FormFeedback } from "./form-feedback";
 type Status = "idle" | "opening" | "open" | "saving";
 
 const labels: Record<Exclude<Status, "idle">, string> = {
-  opening: "Abrindo a Pluggy…",
-  open: "Aguardando a Pluggy…",
+  opening: "Abrindo…",
+  open: "Aguardando a autorização…",
   saving: "Salvando e sincronizando…",
 };
 
@@ -53,7 +53,7 @@ export function ConnectBankButton({
           setStatus("idle");
         },
         onError: ({ message }) => {
-          setState({ ok: false, error: `A Pluggy não concluiu a conexão: ${message}` });
+          setState({ ok: false, error: `Não foi possível concluir a conexão: ${message}` });
         },
         onClose: () => {
           setStatus((current) => (current === "saving" ? current : "idle"));
@@ -62,7 +62,7 @@ export function ConnectBankButton({
       await widget.init();
       setStatus((current) => (current === "opening" ? "open" : current));
     } catch {
-      setState({ ok: false, error: "Não foi possível abrir a janela da Pluggy. Verifique a internet e tente novamente." });
+      setState({ ok: false, error: "Não foi possível abrir a janela de conexão. Verifique a internet e tente novamente." });
       setStatus("idle");
     }
   }

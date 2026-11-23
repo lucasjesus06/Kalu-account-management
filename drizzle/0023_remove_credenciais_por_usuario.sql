@@ -1,0 +1,1 @@
+DROP TABLE "pluggy_credentials" CASCADE;

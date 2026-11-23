@@ -8,7 +8,6 @@ import {
   financialAccounts,
   householdSharedAccounts,
   integrationConnections,
-  pluggyCredentials,
   syncRuns,
   transactions,
 } from "@/db/schema";
@@ -17,7 +16,6 @@ import { detectChanges, hasChanged } from "@/domain/changes";
 import { merchantName } from "@/domain/merchant";
 import type { ImportedAccount, ImportedBill, ImportedTransaction } from "@/domain/imported";
 import {
-  authenticate,
   getItem,
   listAccounts,
   listBills,
@@ -26,10 +24,10 @@ import {
   PluggyNotFoundError,
 } from "@/integrations/pluggy/client";
 import { evaluateAndNotify } from "./budget";
-import { decrypt } from "./crypto";
 import { refreshExpenseNature } from "./expense-nature";
 import { loadHouseholdRules } from "./rules";
 import { listHouseholdLinks } from "./profiles";
+import { appApiKey, PluggyNotConfiguredError } from "./pluggy-app";
 
 export type SyncResult =
   | { ok: true; accounts: number; bills: number; transactions: number; changes: TransactionChanges }
@@ -272,6 +270,9 @@ function describeError(error: unknown) {
   if (error instanceof SyncError) {
     return error.message;
   }
+  if (error instanceof PluggyNotConfiguredError) {
+    return "A conexão com bancos ainda não foi ativada neste ambiente.";
+  }
   if (error instanceof AuthorizationExpiredError) {
     return "A autorização desta conexão expirou. Renove a autorização em Conexões para voltar a sincronizar.";
   }
@@ -321,19 +322,7 @@ async function syncConnectionImpl(connectionId: string): Promise<SyncResult> {
   }
 
   try {
-    const [credentials] = await db
-      .select()
-      .from(pluggyCredentials)
-      .where(eq(pluggyCredentials.memberId, connection.memberId))
-      .limit(1);
-    if (!credentials) {
-      throw new SyncError("Cadastre as credenciais da Pluggy antes de sincronizar.");
-    }
-
-    const apiKey = await authenticate({
-      clientId: credentials.clientId,
-      clientSecret: decrypt(credentials.clientSecretEncrypted),
-    });
+    const apiKey = await appApiKey();
     const item = await getItem(apiKey, connection.externalItemId);
     const authorizationExpiresAt = item.consentExpiresAt ?? connection.authorizationExpiresAt;
     if (item.consentExpiresAt) {

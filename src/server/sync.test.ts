@@ -1,5 +1,4 @@
 import { householdScope, personalScope } from "@/domain/scope";
-import { randomBytes } from "node:crypto";
 import { asc, eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -12,7 +11,6 @@ import {
   householdMembers,
   householdMemberships,
   integrationConnections,
-  pluggyCredentials,
   syncRuns,
   transactions,
 } from "@/db/schema";
@@ -25,7 +23,7 @@ import { createTestDatabase, seedHousehold } from "@/test/database";
 const state = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock("@/db/client", () => ({ getDb: () => state.db, getServiceDb: () => state.db, asService: <T>(work: () => Promise<T>) => work() }));
 
-const { encrypt } = await import("./crypto");
+const { forgetAppApiKey } = await import("./pluggy-app");
 const { latestSyncRuns, syncAllConnections, syncConnection } = await import("./sync");
 const { listAccounts } = await import("./accounts");
 const { listCardBills } = await import("./bills");
@@ -82,15 +80,14 @@ function simulatePluggy() {
 }
 
 beforeEach(async () => {
-  vi.stubEnv("ENCRYPTION_KEY", randomBytes(32).toString("base64"));
   state.db = await createTestDatabase();
   const { household, lucas, karina } = await seedHousehold(db());
   householdId = household.id;
   karinaId = karina.id;
   lucasId = lucas.id;
-  await db()
-    .insert(pluggyCredentials)
-    .values({ memberId: lucas.id, clientId: "593ce5a5-bd0f-47d1-af52-50d0acb74bee", clientSecretEncrypted: encrypt("segredo") });
+  vi.stubEnv("PLUGGY_CLIENT_ID", "593ce5a5-bd0f-47d1-af52-50d0acb74bee");
+  vi.stubEnv("PLUGGY_CLIENT_SECRET", "segredo");
+  forgetAppApiKey();
   const [connection] = await db()
     .insert(integrationConnections)
     .values({ memberId: lucas.id, externalItemId: ITEM_ID, institutionName: "Santander" })

@@ -1,43 +1,16 @@
 import "server-only";
-import { and, asc, eq, max, sql } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { integrationConnections, pluggyCredentials, webhookEvents } from "@/db/schema";
-import {
-  authenticate,
-  createConnectToken,
-  getItem,
-  PluggyAuthError,
-  PluggyNotFoundError,
-} from "@/integrations/pluggy/client";
+import { integrationConnections } from "@/db/schema";
+import { createConnectToken, getItem, PluggyAuthError, PluggyNotFoundError } from "@/integrations/pluggy/client";
 import { defaultAuthorizationExpiry } from "@/domain/authorization";
-import { decrypt, encrypt } from "./crypto";
+import { appApiKey, forgetAppApiKey, PluggyNotConfiguredError } from "./pluggy-app";
 
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
 
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const PLUGGY_UNAVAILABLE = "Não foi possível falar com a Pluggy agora. Tente novamente em instantes.";
-
-export async function getCredentialsSummary(memberId: string) {
-  const db = getDb();
-  const [[credentials], [lastEvent]] = await Promise.all([
-    db
-      .select({
-        clientId: pluggyCredentials.clientId,
-        updatedAt: pluggyCredentials.updatedAt,
-        webhookRegisteredAt: pluggyCredentials.webhookRegisteredAt,
-      })
-      .from(pluggyCredentials)
-      .where(eq(pluggyCredentials.memberId, memberId))
-      .limit(1),
-    db
-      .select({ receivedAt: max(webhookEvents.receivedAt) })
-      .from(webhookEvents)
-      .innerJoin(integrationConnections, eq(integrationConnections.id, webhookEvents.connectionId))
-      .where(eq(integrationConnections.memberId, memberId)),
-  ]);
-  return credentials ? { ...credentials, lastWebhookAt: lastEvent?.receivedAt ?? null } : null;
-}
 
 export async function listConnections(memberId: string) {
   return getDb()
@@ -55,61 +28,13 @@ export async function listConnections(memberId: string) {
     .orderBy(asc(integrationConnections.createdAt));
 }
 
-export async function saveCredentials(
-  memberId: string,
-  clientId: string,
-  clientSecret: string,
-): Promise<ActionResult> {
-  if (!UUID_PATTERN.test(clientId)) {
-    return { ok: false, error: "O Client ID precisa estar no formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx." };
-  }
-  if (!clientSecret) {
-    return { ok: false, error: "Informe o Client Secret." };
-  }
-
-  try {
-    await authenticate({ clientId, clientSecret });
-  } catch (error) {
-    if (error instanceof PluggyAuthError) {
-      return { ok: false, error: "A Pluggy recusou essas credenciais. Confira o Client ID e o Client Secret." };
-    }
-    console.error("Falha ao validar credenciais na Pluggy", error);
-    return { ok: false, error: PLUGGY_UNAVAILABLE };
-  }
-
-  const clientSecretEncrypted = encrypt(clientSecret);
-  await getDb()
-    .insert(pluggyCredentials)
-    .values({ memberId, clientId, clientSecretEncrypted })
-    .onConflictDoUpdate({
-      target: pluggyCredentials.memberId,
-      set: {
-        clientId,
-        clientSecretEncrypted,
-        webhookId: sql`case when ${pluggyCredentials.clientId} = excluded.client_id then ${pluggyCredentials.webhookId} end`,
-        webhookRegisteredAt: sql`case when ${pluggyCredentials.clientId} = excluded.client_id then ${pluggyCredentials.webhookRegisteredAt} end`,
-        updatedAt: new Date(),
-      },
-    });
-
-  return { ok: true, message: "Credenciais validadas na Pluggy e salvas." };
-}
-
-export async function loadApiKey(memberId: string) {
-  const [credentials] = await getDb()
-    .select()
-    .from(pluggyCredentials)
-    .where(eq(pluggyCredentials.memberId, memberId))
-    .limit(1);
-  if (!credentials) {
-    return null;
-  }
-  return authenticate({ clientId: credentials.clientId, clientSecret: decrypt(credentials.clientSecretEncrypted) });
-}
-
 function pluggyFailure(error: unknown, notFound: string): { ok: false; error: string } {
+  if (error instanceof PluggyNotConfiguredError) {
+    return { ok: false, error: "A conexão com bancos ainda não foi ativada neste ambiente." };
+  }
   if (error instanceof PluggyAuthError) {
-    return { ok: false, error: "Suas credenciais deixaram de ser aceitas pela Pluggy. Cadastre-as novamente." };
+    forgetAppApiKey();
+    return { ok: false, error: PLUGGY_UNAVAILABLE };
   }
   if (error instanceof PluggyNotFoundError) {
     return { ok: false, error: notFound };
@@ -118,16 +43,11 @@ function pluggyFailure(error: unknown, notFound: string): { ok: false; error: st
   return { ok: false, error: PLUGGY_UNAVAILABLE };
 }
 
-const MISSING_CREDENTIALS = "Cadastre suas credenciais da Pluggy antes de conectar um banco.";
-const ITEM_NOT_FOUND = "Esse Item ID não foi encontrado nas suas credenciais. Confira em Connected Items, no Dashboard da Pluggy.";
+const ITEM_NOT_FOUND = "Não encontramos essa conexão. Tente adicionar o banco novamente.";
 
-async function fetchItem(memberId: string, itemId: string) {
+async function fetchItem(itemId: string) {
   try {
-    const apiKey = await loadApiKey(memberId);
-    if (!apiKey) {
-      return { ok: false as const, error: MISSING_CREDENTIALS };
-    }
-    const item = await getItem(apiKey, itemId);
+    const item = await getItem(await appApiKey(), itemId);
     return {
       ok: true as const,
       institutionName: item.institutionName,
@@ -136,34 +56,6 @@ async function fetchItem(memberId: string, itemId: string) {
   } catch (error) {
     return pluggyFailure(error, ITEM_NOT_FOUND);
   }
-}
-
-export async function addConnection(memberId: string, itemId: string): Promise<ActionResult> {
-  if (!UUID_PATTERN.test(itemId)) {
-    return { ok: false, error: "O Item ID precisa estar no formato xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx." };
-  }
-
-  const item = await fetchItem(memberId, itemId);
-  if (!item.ok) {
-    return item;
-  }
-
-  const inserted = await getDb()
-    .insert(integrationConnections)
-    .values({
-      memberId,
-      externalItemId: itemId,
-      institutionName: item.institutionName,
-      authorizationExpiresAt: item.authorizationExpiresAt,
-    })
-    .onConflictDoNothing()
-    .returning({ id: integrationConnections.id });
-
-  if (inserted.length === 0) {
-    return { ok: false, error: "Essa conexão já está cadastrada." };
-  }
-
-  return { ok: true, message: item.institutionName ? `Conexão com ${item.institutionName} adicionada.` : "Conexão adicionada." };
 }
 
 export type ConnectSession = { ok: true; connectToken: string; updateItem: string | null } | { ok: false; error: string };
@@ -190,11 +82,7 @@ export async function startConnectSession(memberId: string, renewConnectionId?: 
   }
 
   try {
-    const apiKey = await loadApiKey(memberId);
-    if (!apiKey) {
-      return { ok: false, error: MISSING_CREDENTIALS };
-    }
-    return { ok: true, connectToken: await createConnectToken(apiKey, updateItem ?? undefined), updateItem };
+    return { ok: true, connectToken: await createConnectToken(await appApiKey(), updateItem ?? undefined, memberId), updateItem };
   } catch (error) {
     return pluggyFailure(error, "A conexão que você quer renovar não foi encontrada na Pluggy.");
   }
@@ -210,7 +98,7 @@ export async function registerConnectedItem(
   if (!UUID_PATTERN.test(itemId)) {
     return { ok: false, error: "A Pluggy devolveu uma conexão inválida. Tente novamente." };
   }
-  const item = await fetchItem(memberId, itemId);
+  const item = await fetchItem(itemId);
   if (!item.ok) {
     return item;
   }
