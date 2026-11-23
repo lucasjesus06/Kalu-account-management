@@ -37,7 +37,7 @@ async function HomeContent() {
   const [members, connections, comparison, cardBills, goals] = await Promise.all([
     household ? getRenderHouseholdMembers(household.householdId) : [],
     listConnections(profile.memberId),
-    getConsumptionComparison(scope, undefined, undefined, now),
+    getConsumptionComparison(scope, undefined, undefined, now, false),
     listCardBills(scope),
     household ? getBudgetOverview(household.householdId, monthOf(now)) : [],
   ]);

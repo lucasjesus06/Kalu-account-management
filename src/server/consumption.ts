@@ -116,6 +116,7 @@ export async function getConsumptionComparison(
   month: string | undefined,
   compareTo: string | undefined,
   now: Date,
+  includeMonths = true,
 ) {
   const selectedMonth = isMonth(month) ? month : monthOf(now);
   const comparedMonth = isMonth(compareTo) && compareTo !== selectedMonth ? compareTo : shiftMonth(selectedMonth, -1);
@@ -127,7 +128,7 @@ export async function getConsumptionComparison(
   };
   const [{ records, billTotals }, months, coverage] = await Promise.all([
     loadConsumptionRecords(scope, range),
-    availableMonths(scope),
+    includeMonths ? availableMonths(scope) : Promise.resolve<string[]>([]),
     getDataCoverage(scope),
   ]);
   const current = summarize(records, billTotals, periods.current);
