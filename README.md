@@ -382,6 +382,13 @@ O Kalu pode ser instalado na tela inicial do celular e abre em tela cheia, como 
 
 Para instalar: abra o Kalu publicado (HTTPS) no celular, entre com sua conta e use o cartão do Início ou o menu do navegador.
 
+## Desempenho e cache
+
+- Perfil e residências da pessoa vêm numa consulta só (`loadAccess`).
+- Telas e cabeçalho leem o contexto por `getRenderContext`, `getRenderProfile`, `getRenderMember` e `getRenderHouseholdMembers`, que usam `cache` do React e rodam uma vez por requisição. Só podem ser usados em componentes e páginas. Ações e route handlers continuam com `getCurrentContext` e afins, porque `cache` não isola requisições fora da renderização.
+- A navegação reaproveita as telas já visitadas por 30 segundos (`staleTimes` em `next.config.ts`), então voltar a uma tela não consulta o servidor nem o banco.
+- Toda ação que altera dados chama `refresh()` e as de entrar, sair e aceitar convite chamam `revalidatePath("/", "layout")`, o que descarta esse cache na hora. Uma ação nova que muda dados precisa fazer o mesmo, senão a tela mostra o valor antigo por até 30 segundos.
+
 ## Testes
 
 ```bash
