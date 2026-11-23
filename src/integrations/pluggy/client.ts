@@ -123,6 +123,22 @@ export async function ensureWebhook(apiKey: string, url: string, headers: Record
   return webhook.id;
 }
 
+export async function findConnectorId(apiKey: string, name: string) {
+  const body = await get<{ results?: { id?: unknown; name?: unknown }[] }>(
+    apiKey,
+    `/connectors?name=${encodeURIComponent(name)}`,
+    "Conector",
+  );
+  const wanted = name.replace(/\s/g, "").toLowerCase();
+  const match = body.results?.find(
+    (connector) =>
+      typeof connector.id === "number" &&
+      typeof connector.name === "string" &&
+      connector.name.replace(/\s/g, "").toLowerCase() === wanted,
+  );
+  return typeof match?.id === "number" ? match.id : null;
+}
+
 export async function getItem(apiKey: string, itemId: string): Promise<PluggyItemSummary> {
   const body = await get<{
     id?: unknown;

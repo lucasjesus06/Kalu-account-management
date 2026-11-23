@@ -5,6 +5,7 @@ import cardTransactionsFixture from "./__fixtures__/card-transactions.json";
 import {
   authenticate,
   createConnectToken,
+  findConnectorId,
   ensureWebhook,
   getItem,
   listAccounts,
@@ -53,6 +54,20 @@ describe("authenticate", () => {
   it("rejeita resposta sem apiKey", async () => {
     vi.stubGlobal("fetch", respostaFalsa(200, {}));
     await expect(authenticate(credenciais)).rejects.toBeInstanceOf(PluggyRequestError);
+  });
+});
+
+describe("findConnectorId", () => {
+  it("acha o conector pelo nome, ignorando espaços e maiúsculas", async () => {
+    vi.stubGlobal("fetch", respostaFalsa(200, { results: [{ id: 1, name: "Outro" }, { id: 200, name: "Meu Pluggy" }] }));
+
+    await expect(findConnectorId("chave-123", "MeuPluggy")).resolves.toBe(200);
+  });
+
+  it("devolve nulo quando não existe", async () => {
+    vi.stubGlobal("fetch", respostaFalsa(200, { results: [] }));
+
+    await expect(findConnectorId("chave-123", "MeuPluggy")).resolves.toBeNull();
   });
 });
 

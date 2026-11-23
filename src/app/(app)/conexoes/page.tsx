@@ -42,9 +42,13 @@ async function ConnectionsContent() {
           <div className="mb-6 flex flex-col gap-1">
             <p className="font-medium">Nenhum banco conectado ainda</p>
             <p className="text-sm text-muted-foreground">
-              Adicione seu banco para o Kalu montar suas faturas e gastos. Uma janela segura abre aqui mesmo para você
-              escolher o banco e autorizar. No primeiro acesso, a janela guia você para criar o seu Meu Pluggy, gratuito, onde ficam as autorizações dos seus bancos.
+              Adicione seu banco para o Kalu montar suas faturas e gastos. Uma janela segura abre aqui mesmo.
             </p>
+            <ol className="mt-3 list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+              <li>Entre no seu Meu Pluggy ou crie a conta, que é gratuita.</li>
+              <li>Escolha o banco e autorize o acesso.</li>
+              <li>Volte ao Kalu: suas contas aparecem sozinhas.</li>
+            </ol>
           </div>
         ) : (
           <ul className="flex flex-col divide-y">
