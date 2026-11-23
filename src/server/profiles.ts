@@ -51,6 +51,42 @@ export async function updateDisplayName(memberId: string, name: string) {
   await getDb().update(householdMembers).set({ displayName: name }).where(eq(householdMembers.id, memberId));
 }
 
+async function loadAccessImpl(userId: string, displayName: string): Promise<{ profile: Profile; households: HouseholdLink[] }> {
+  const read = () =>
+    getDb()
+      .select({
+        memberId: householdMembers.id,
+        displayName: householdMembers.displayName,
+        householdId: households.id,
+        householdName: households.name,
+        role: householdMemberships.role,
+      })
+      .from(householdMembers)
+      .leftJoin(householdMemberships, eq(householdMemberships.memberId, householdMembers.id))
+      .leftJoin(households, eq(households.id, householdMemberships.householdId))
+      .where(eq(householdMembers.userId, userId))
+      .orderBy(asc(householdMemberships.createdAt), asc(householdMemberships.id));
+
+  let rows = await read();
+  if (rows.length === 0) {
+    await ensureProfileImpl(userId, displayName);
+    rows = await read();
+  }
+  const [first] = rows;
+  return {
+    profile: { memberId: first.memberId, displayName: first.displayName },
+    households: rows.flatMap((row) =>
+      row.householdId && row.householdName && row.role
+        ? [{ householdId: row.householdId, householdName: row.householdName, role: row.role }]
+        : [],
+    ),
+  };
+}
+
 export function ensureProfile(...args: Parameters<typeof ensureProfileImpl>) {
   return asService(() => ensureProfileImpl(...args));
+}
+
+export function loadAccess(...args: Parameters<typeof loadAccessImpl>) {
+  return asService(() => loadAccessImpl(...args));
 }

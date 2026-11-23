@@ -12,7 +12,7 @@ import {
 } from "@/domain/change-log";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/format";
-import { getCurrentMember } from "@/server/auth";
+import { getRenderMember } from "@/server/auth";
 import { listChanges } from "@/server/change-log";
 
 export const metadata: Metadata = {
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
 };
 
 async function HistoryContent({ searchParams }: Pick<PageProps<"/historico">, "searchParams">) {
-  const member = await getCurrentMember();
+  const member = await getRenderMember();
   if (!member) {
     return <p className="text-muted-foreground">Sua conta ainda não está vinculada a uma residência.</p>;
   }

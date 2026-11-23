@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { AddDialog } from "@/components/add-dialog";
 import { StatusBadge } from "@/components/status-badge";
 import { formatDate } from "@/lib/format";
-import { getCurrentProfile } from "@/server/auth";
+import { getRenderProfile } from "@/server/auth";
 import { listManagedHouseholds } from "@/server/households";
 import {
   CreateHouseholdForm,
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 };
 
 async function FamilyContent() {
-  const profile = await getCurrentProfile();
+  const profile = await getRenderProfile();
   const households = await listManagedHouseholds(profile.memberId);
 
   return (

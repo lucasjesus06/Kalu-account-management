@@ -14,7 +14,7 @@ import { fromCents } from "@/domain/money";
 import { monthOf } from "@/domain/periods";
 import { formatDateTime, formatMonth, formatPeriod } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { getCurrentContext, listHouseholdMembers } from "@/server/auth";
+import { getRenderContext, getRenderHouseholdMembers } from "@/server/auth";
 import { listCardBills } from "@/server/bills";
 import { listConnections } from "@/server/connections";
 import { getBudgetOverview } from "@/server/budget";
@@ -30,14 +30,14 @@ function capitalize(text: string) {
 }
 
 async function HomeContent() {
-  const { profile, scope, household } = await getCurrentContext();
+  const { profile, scope, household } = await getRenderContext();
   const inHousehold = household !== null;
 
   const now = new Date();
   const [members, connections, comparison, cardBills, goals] = await Promise.all([
-    household ? listHouseholdMembers(household.householdId) : [],
+    household ? getRenderHouseholdMembers(household.householdId) : [],
     listConnections(profile.memberId),
-    getConsumptionComparison(scope, undefined, undefined, now),
+    getConsumptionComparison(scope, undefined, undefined, now, false),
     listCardBills(scope),
     household ? getBudgetOverview(household.householdId, monthOf(now)) : [],
   ]);

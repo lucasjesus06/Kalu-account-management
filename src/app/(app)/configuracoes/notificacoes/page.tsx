@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { getCurrentProfile } from "@/server/auth";
+import { getRenderProfile } from "@/server/auth";
 import { countMemberSubscriptions, vapidPublicKey } from "@/server/push";
 import { PushToggle } from "../../metas/push-toggle";
 
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 };
 
 async function NotificationsContent() {
-  const profile = await getCurrentProfile();
+  const profile = await getRenderProfile();
   const subscribedDevices = await countMemberSubscriptions(profile.memberId);
 
   return (

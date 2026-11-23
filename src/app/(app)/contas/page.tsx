@@ -10,7 +10,7 @@ import { fromCents } from "@/domain/money";
 import { formatDateTime, formatIsoDate } from "@/lib/format";
 import { listAccounts } from "@/server/accounts";
 import { listCardBills } from "@/server/bills";
-import { getCurrentContext } from "@/server/auth";
+import { getRenderContext } from "@/server/auth";
 
 export const metadata: Metadata = {
   title: "Contas · Kalu",
@@ -28,7 +28,7 @@ function plural(total: number, singular: string, pluralForm: string) {
 }
 
 async function AccountsContent() {
-  const { scope } = await getCurrentContext();
+  const { scope } = await getRenderContext();
 
   const [accounts, cardBills] = await Promise.all([
     listAccounts(scope),

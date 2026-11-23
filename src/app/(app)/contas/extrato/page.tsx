@@ -11,7 +11,7 @@ import { fromCents } from "@/domain/money";
 import { statementNature } from "@/domain/statement";
 import { formatMonth } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { getCurrentContext, listHouseholdMembers } from "@/server/auth";
+import { getRenderContext, getRenderHouseholdMembers } from "@/server/auth";
 import { listCategories } from "@/server/categorization";
 import { getAccountStatement } from "@/server/statement";
 import { CategoryCorrectionProvider } from "../category-correction";
@@ -22,13 +22,13 @@ export const metadata: Metadata = {
 };
 
 async function StatementContent({ searchParams }: Pick<PageProps<"/contas/extrato">, "searchParams">) {
-  const { scope, household } = await getCurrentContext();
+  const { scope, household } = await getRenderContext();
 
   const { conta, mes } = await searchParams;
   const [statement, categories, members] = await Promise.all([
     getAccountStatement(scope, typeof conta === "string" ? conta : "", typeof mes === "string" ? mes : undefined),
     listCategories(),
-    household ? listHouseholdMembers(household.householdId) : [],
+    household ? getRenderHouseholdMembers(household.householdId) : [],
   ]);
   if (!statement) {
     notFound();
