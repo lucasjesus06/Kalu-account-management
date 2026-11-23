@@ -7,7 +7,7 @@ import { createTestDatabase, seedHousehold } from "@/test/database";
 const state = vi.hoisted(() => ({ db: undefined as unknown }));
 vi.mock("@/db/client", () => ({ getDb: () => state.db, getServiceDb: () => state.db, asService: <T>(work: () => Promise<T>) => work() }));
 
-const { ensureProfile, listHouseholdLinks } = await import("./profiles");
+const { ensureProfile, listHouseholdLinks, loadAccess } = await import("./profiles");
 
 type TestDb = Awaited<ReturnType<typeof createTestDatabase>>;
 const db = () => state.db as TestDb;
@@ -23,6 +23,31 @@ beforeEach(async () => {
   state.db = await createTestDatabase();
   await authUser(USER_A);
   await authUser(USER_B);
+});
+
+describe("acesso do usuário em uma consulta", () => {
+  it("cria o perfil na primeira vez e devolve sem residências", async () => {
+    const access = await loadAccess(USER_A, "Ana");
+
+    expect(access.profile.displayName).toBe("Ana");
+    expect(access.households).toEqual([]);
+    expect(await db().$count(householdMembers)).toBe(1);
+  });
+
+  it("devolve as mesmas residências que a listagem separada, na mesma ordem", async () => {
+    const profile = await ensureProfile(USER_A, "Ana");
+    const [casa, sitio] = await db().insert(households).values([{ name: "Casa" }, { name: "Sítio" }]).returning();
+    await db().insert(householdMemberships).values([
+      { householdId: casa.id, memberId: profile.memberId, role: "admin" },
+      { householdId: sitio.id, memberId: profile.memberId, role: "member" },
+    ]);
+
+    const access = await loadAccess(USER_A, "Ana");
+
+    expect(access.profile).toEqual(profile);
+    expect(access.households).toEqual(await listHouseholdLinks(profile.memberId));
+    expect(access.households.map((link) => link.householdName).sort()).toEqual(["Casa", "Sítio"]);
+  });
 });
 
 describe("perfil pessoal", () => {
