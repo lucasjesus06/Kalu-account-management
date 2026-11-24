@@ -45,9 +45,9 @@ function pluggyFailure(error: unknown, notFound: string): { ok: false; error: st
 
 const ITEM_NOT_FOUND = "Não encontramos essa conexão. Tente adicionar o banco novamente.";
 
-async function fetchItem(itemId: string) {
+async function fetchItem(memberId: string, itemId: string) {
   try {
-    const item = await getItem(await appApiKey(), itemId);
+    const item = await getItem(await appApiKey(memberId), itemId);
     return {
       ok: true as const,
       institutionName: item.institutionName,
@@ -97,7 +97,7 @@ export async function startConnectSession(memberId: string, renewConnectionId?: 
   }
 
   try {
-    const apiKey = await appApiKey();
+    const apiKey = await appApiKey(memberId);
     const connectToken = await createConnectToken(apiKey, updateItem ?? undefined, memberId);
     const connectorId = updateItem ? null : await lookupMeuPluggyConnector(apiKey);
     return { ok: true, connectToken, updateItem, connectorId };
@@ -116,7 +116,7 @@ export async function registerConnectedItem(
   if (!UUID_PATTERN.test(itemId)) {
     return { ok: false, error: "A Pluggy devolveu uma conexão inválida. Tente novamente." };
   }
-  const item = await fetchItem(itemId);
+  const item = await fetchItem(memberId, itemId);
   if (!item.ok) {
     return item;
   }

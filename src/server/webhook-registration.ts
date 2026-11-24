@@ -19,7 +19,7 @@ export function webhookUrl(env: Record<string, string | undefined> = process.env
   }
 }
 
-export async function registerWebhook(): Promise<ActionResult> {
+export async function registerWebhook(memberId?: string): Promise<ActionResult> {
   const secret = process.env.PLUGGY_WEBHOOK_SECRET;
   if (!secret) {
     return { ok: false, error: "Configure a variável PLUGGY_WEBHOOK_SECRET antes de ativar as notificações." };
@@ -30,7 +30,7 @@ export async function registerWebhook(): Promise<ActionResult> {
   }
 
   try {
-    await ensureWebhook(await appApiKey(), url, { [WEBHOOK_SECRET_HEADER]: secret });
+    await ensureWebhook(await appApiKey(memberId), url, { [WEBHOOK_SECRET_HEADER]: secret });
   } catch (error) {
     if (error instanceof PluggyNotConfiguredError) {
       return { ok: false, error: "A conexão com bancos ainda não foi ativada neste ambiente." };

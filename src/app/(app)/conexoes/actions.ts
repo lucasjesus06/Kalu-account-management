@@ -62,7 +62,7 @@ export async function finishConnectAction(itemId: string, renewConnectionId?: st
   }
 
   const sync = await syncConnection(registered.connectionId);
-  await registerWebhook().catch(() => undefined);
+  await registerWebhook(member.memberId).catch(() => undefined);
   refresh();
   if (!sync.ok) {
     return {

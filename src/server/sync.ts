@@ -322,7 +322,7 @@ async function syncConnectionImpl(connectionId: string): Promise<SyncResult> {
   }
 
   try {
-    const apiKey = await appApiKey();
+    const apiKey = await appApiKey(connection.memberId);
     const item = await getItem(apiKey, connection.externalItemId);
     const authorizationExpiresAt = item.consentExpiresAt ?? connection.authorizationExpiresAt;
     if (item.consentExpiresAt) {
