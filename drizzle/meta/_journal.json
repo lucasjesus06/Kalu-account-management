@@ -169,6 +169,13 @@
       "when": 1795468551563,
       "tag": "0023_remove_credenciais_por_usuario",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795529748237,
+      "tag": "0024_credenciais_proprias_por_pessoa",
+      "breakpoints": true
     }
   ]
 }

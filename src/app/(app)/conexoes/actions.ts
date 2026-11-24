@@ -10,6 +10,7 @@ import {
   type ActionResult,
   type ConnectSession,
 } from "@/server/connections";
+import { removeOwnCredentials, saveOwnCredentials } from "@/server/own-credentials";
 import { shareAccount } from "@/server/sharing";
 import { syncConnection } from "@/server/sync";
 import { registerWebhook } from "@/server/webhook-registration";
@@ -62,7 +63,7 @@ export async function finishConnectAction(itemId: string, renewConnectionId?: st
   }
 
   const sync = await syncConnection(registered.connectionId);
-  await registerWebhook().catch(() => undefined);
+  await registerWebhook(member.memberId).catch(() => undefined);
   refresh();
   if (!sync.ok) {
     return {
@@ -71,4 +72,24 @@ export async function finishConnectAction(itemId: string, renewConnectionId?: st
     };
   }
   return { ok: true, message: `${registered.message} Sincronizado: ${formatTransactionChanges(sync.changes)}.` };
+}
+
+export async function saveOwnCredentialsAction(_prevState: FormState, formData: FormData): Promise<FormState> {
+  const member = await getCurrentProfile();
+
+  const result = await saveOwnCredentials(member.memberId, field(formData, "clientId"), field(formData, "clientSecret"));
+  if (result.ok) {
+    refresh();
+  }
+  return result;
+}
+
+export async function removeOwnCredentialsAction(): Promise<FormState> {
+  const member = await getCurrentProfile();
+
+  const result = await removeOwnCredentials(member.memberId);
+  if (result.ok) {
+    refresh();
+  }
+  return result;
 }

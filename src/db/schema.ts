@@ -47,6 +47,16 @@ export const householdMemberships = pgTable(
   ],
 ).enableRLS();
 
+export const pluggyCredentials = pgTable("pluggy_credentials", {
+  memberId: uuid("member_id")
+    .primaryKey()
+    .references(() => householdMembers.id, { onDelete: "cascade" }),
+  clientId: text("client_id").notNull(),
+  clientSecretEncrypted: text("client_secret_encrypted").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS();
+
 export const connectionStatuses = ["active", "expired", "revoked", "error"] as const;
 
 export const integrationConnections = pgTable(

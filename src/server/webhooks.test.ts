@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { integrationConnections, webhookEvents } from "@/db/schema";
+import { integrationConnections, pluggyCredentials, webhookEvents } from "@/db/schema";
 import { createTestDatabase, seedHousehold } from "@/test/database";
 
 const state = vi.hoisted(() => ({ db: undefined as unknown, sync: vi.fn() }));
@@ -92,6 +92,15 @@ describe("processamento dos eventos", () => {
     });
     expect((await receive(payload("connector/status_updated", { itemId: undefined }))).outcome).toMatchObject({ result: "ignored" });
     expect(state.sync).not.toHaveBeenCalled();
+  });
+
+  it("confere o Client ID da credencial própria de quem conectou o banco", async () => {
+    const OWN_CLIENT_ID = "11111111-2222-4333-8444-555555555555";
+    const [{ memberId }] = await db().select({ memberId: integrationConnections.memberId }).from(integrationConnections);
+    await db().insert(pluggyCredentials).values({ memberId, clientId: OWN_CLIENT_ID, clientSecretEncrypted: "v1:a:b:c" });
+
+    expect((await receive(payload("item/updated"))).outcome).toMatchObject({ result: "ignored", detail: "Client ID diferente do cadastrado." });
+    expect((await receive(payload("item/updated", { clientId: OWN_CLIENT_ID }))).outcome).toMatchObject({ result: "synced" });
   });
 
   it("não processa duas vezes a mesma entrega", async () => {
