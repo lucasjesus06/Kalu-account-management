@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { Plug } from "lucide-react";
+import { KeyRound, Plug } from "lucide-react";
 import { AuthorizationNotice } from "@/components/authorization-notice";
 import { PageHeader } from "@/components/page-header";
 import { Panel } from "@/components/panel";
@@ -9,9 +9,10 @@ import { authorizationAlert } from "@/domain/authorization";
 import { getRenderProfile } from "@/server/auth";
 import { formatDate, formatDateTime, formatTransactionChanges } from "@/lib/format";
 import { listConnections } from "@/server/connections";
-import { pluggyAppCredentials } from "@/server/pluggy-app";
+import { ownClientId, pluggyAvailableFor } from "@/server/pluggy-app";
 import { latestSyncRuns } from "@/server/sync";
 import { ConnectBankButton } from "./connect-bank-button";
+import { OwnConnectionForm } from "./own-connection-form";
 import { SyncButton } from "./sync-button";
 
 export const metadata: Metadata = {
@@ -28,7 +29,7 @@ const statusBadges = {
 async function ConnectionsContent() {
   const member = await getRenderProfile();
   const connections = await listConnections(member.memberId);
-  const available = pluggyAppCredentials() !== null;
+  const [available, ownId] = await Promise.all([pluggyAvailableFor(member.memberId), ownClientId(member.memberId)]);
   const runs = await latestSyncRuns(connections.map((connection) => connection.id));
   const now = new Date();
 
@@ -112,6 +113,16 @@ async function ConnectionsContent() {
           )}
         </div>
       </Panel>
+
+      <details className="mt-6 rounded-2xl border bg-card text-card-foreground" open={ownId !== null}>
+        <summary className="flex cursor-pointer items-center gap-2 px-5 py-4 text-xs font-semibold tracking-[0.12em] text-muted-foreground uppercase sm:px-6">
+          <KeyRound className="size-4 text-primary" />
+          Usar minha própria conexão
+        </summary>
+        <div className="border-t p-5 sm:p-6">
+          <OwnConnectionForm clientId={ownId} />
+        </div>
+      </details>
     </div>
   );
 }
